@@ -1,5 +1,7 @@
 # Indian Sign Language Recognition
 
+[![ci](https://github.com/pajiala99/isl-recognition/actions/workflows/ci.yml/badge.svg)](https://github.com/pajiala99/isl-recognition/actions/workflows/ci.yml)
+
 Word-level ISL recognition from video: MediaPipe skeletal keypoints → signer-invariant
 features → BiLSTM with temporal attention → word, text and speech. Runs live on a laptop
 webcam; no server, no video leaves the machine.
@@ -150,6 +152,20 @@ python -m isl.demo --random 15 --play --speak
 # 6. live demo: text on screen + spoken output
 python -m isl.realtime --ckpt models/bilstm_orig.pt --speak
 ```
+
+## Tests
+
+```bash
+pip install pytest
+pytest
+```
+
+13 tests run in seconds on synthetic landmarks, with no dataset or camera: the feature
+layout and its invariance to where the signer stands and how far away, the group-aware
+split (no take's tilt variants on both sides), mirroring and augmentation, both encoders,
+and that `models/bilstm_orig.pt` still loads into the current code with the 61 classes in
+`artifacts/classes.json`. CI runs them on every push to `main`. Not covered: landmark
+extraction from video (needs the Kaggle dataset) and the live demo (needs a webcam).
 
 ## Text and speech output
 
