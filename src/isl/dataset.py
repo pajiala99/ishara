@@ -101,12 +101,21 @@ def _rot_scale_shift(seq: np.ndarray, rot_deg, scale_j, shift_j, rng) -> np.ndar
     return out
 
 
+# MediaPipe names pose landmarks from the signer's side, so a mirror image swaps these pairs
+# (shoulders, elbows, wrists, hips); the nose stays where it is.
+_POSE_LR = {11: 12, 12: 11, 13: 14, 14: 13, 15: 16, 16: 15, 23: 24, 24: 23}
+_POSE_MIRROR = [POSE_IDX.index(_POSE_LR.get(j, j)) for j in POSE_IDX]
+
+
 def _mirror(seq: np.ndarray) -> np.ndarray:
-    """Left/right flip: negate x and swap the two hand blocks (ISL signs are
-    frequently performed with either dominant hand)."""
+    """Left/right flip, as if the sign were made with the other dominant hand: negate x
+    and swap left and right everywhere - the paired arm and hip landmarks of the pose,
+    the two hand blocks and their presence flags."""
     n_pose = len(POSE_IDX)
     out = seq.copy()
-    out[:, 0:n_pose * 3:3] *= -1.0
+    pose = out[:, :n_pose * 3].reshape(len(out), n_pose, 3)[:, _POSE_MIRROR]
+    pose[..., 0] *= -1.0
+    out[:, :n_pose * 3] = pose.reshape(len(out), -1)
     g0 = n_pose * 3
     g1 = g0 + N_HAND * 2
     g2 = g1 + N_HAND * 2

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from isl.config import F_BASE, F_TOTAL, N_HAND, N_POSE, SEQ_LEN, TrainConfig
+from isl.config import F_BASE, F_TOTAL, N_HAND, N_POSE, POSE_IDX, SEQ_LEN, TrainConfig
 from isl.dataset import (ISLSequenceDataset, Sample, _mirror, augment, group_of,
                          index_keypoints, stratified_split)
 from isl.features import build_frame_features
@@ -54,6 +54,18 @@ def test_mirroring_twice_changes_nothing_and_swaps_the_hands(clip):
     flipped_right[:, 0::2] *= -1          # x negated
     np.testing.assert_array_equal(m[:, g:g + 2 * N_HAND], flipped_right)
     np.testing.assert_array_equal(m[:, -2:], f[:, [-1, -2]])  # hand-present flags swap too
+
+
+def test_mirroring_keeps_each_pose_wrist_with_its_hand(clip):
+    # A mirror image swaps the arms as well as the hands: if the pose's left wrist stayed
+    # put while the hands swapped, the mirrored clip would be anatomically impossible.
+    pose, left, right, mask = clip()
+    left[:, 0, :2], right[:, 0, :2] = pose[:, 15, :2], pose[:, 16, :2]   # hands on the wrists
+    m = _mirror(build_frame_features(pose, left, right, mask))
+    g = N_POSE * 3
+    for wrist, hand_x in ((15, g), (16, g + 2 * N_HAND)):
+        x = 3 * POSE_IDX.index(wrist)
+        np.testing.assert_allclose(m[:, x:x + 2], m[:, hand_x:hand_x + 2], atol=1e-6)
 
 
 def test_augmentation_keeps_the_feature_layout(clip):
