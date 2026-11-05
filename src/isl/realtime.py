@@ -96,7 +96,8 @@ def main():
                 ok, frame = cap.read()
                 if not ok:
                     break
-                frame = cv2.flip(frame, 1)
+                # landmarks come from the frame as the camera filmed it, like the dataset clips (record.py
+                # saves takes unmirrored for the same reason); only the window below shows a mirror image
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 p, l, r, m = ex._frame(rgb, int(cap.get(cv2.CAP_PROP_POS_MSEC)) or i * 33)
                 buf["pose"].append(p); buf["left"].append(l)
@@ -125,7 +126,7 @@ def main():
                         streak, streak_word = 0, ""
 
                 voice_name = speaker.voice or speaker.backend
-                cv2.imshow(WIN, draw(frame, label, conf, args.threshold, sentence, muted, voice_name))
+                cv2.imshow(WIN, draw(cv2.flip(frame, 1), label, conf, args.threshold, sentence, muted, voice_name))
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):
                     break

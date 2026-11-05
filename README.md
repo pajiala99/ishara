@@ -237,6 +237,11 @@ the same word predicted on 2 consecutive windows, and not identical to the previ
 Without them the model — which re-predicts every 5 frames — would speak one sign a dozen
 times and read every transition between signs aloud.
 
+The window shows a mirror image, like a selfie, but landmarks are read from the frame as the camera
+filmed it: the dataset was filmed that way, and `record.py` saves takes the same way. Mirroring the
+frame before reading it, as the live demo first did, costs the shipped model 15 of the 182
+held-out takes (167/182 on mirrored input).
+
 Confirmed words accumulate into a sentence shown at the bottom of the window:
 `space` speaks the whole sentence, `c` clears it, `m` mutes, `q` quits.
 
