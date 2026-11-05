@@ -2,9 +2,29 @@
 
 [![ci](https://github.com/pajiala99/isl-recognition/actions/workflows/ci.yml/badge.svg)](https://github.com/pajiala99/isl-recognition/actions/workflows/ci.yml)
 
+**Live demo: [run the model in your browser](https://pajiala99.github.io/#demo-isl)**, on held-out test clips or your
+webcam. MediaPipe's JavaScript tasks track the body and hands, `web/isl.js` computes the same features as
+`features.py`, and the BiLSTM runs as ONNX in onnxruntime-web. No video leaves the device. See
+[Browser version and parity](#browser-version-and-parity).
+
 Word-level ISL recognition from video: MediaPipe skeletal keypoints → signer-invariant
 features → BiLSTM with temporal attention → word, text and speech. Runs live on a laptop
 webcam; no server, no video leaves the machine.
+
+## Model card
+
+| | |
+|---|---|
+| **Predicts** | One of 61 Indian Sign Language words, from a short video of a single isolated sign |
+| **Model** | BiLSTM (2 layers, 192 units each way) with temporal attention, 1.67M parameters: `models/bilstm_orig.pt`, exported to `models/isl_bilstm.onnx` |
+| **Data** | The Kaggle dataset below (MIT): 1,210 original takes of 61 words, all by one signer, one session per word. Split by take, so a take's tilted copies never land on both sides |
+| **Input** | MediaPipe pose (9 upper-body points) and both hands on every third frame, normalised to the shoulders, resampled to 64 frames, plus velocities: 64 × 478 |
+| **Results** | 182 of 182 held-out takes (99.6% ± 0.5 over three training seeds), which proves little because a Random Forest also scores 100%. The harder protocols: 48.9% from one take per word, 95.6% from five, 25.8% with one hand hidden |
+
+**Limits:** one signer, so nothing here measures accuracy on a new signer, and a webcam user should expect
+mistakes; isolated words only; no facial or other non-manual markers; an aid, not an interpreter.
+`bilstm_orig.pt`, the model the live demo runs, was trained before the `_mirror` fix (`6cfba6e`); the seed and
+protocol numbers come from runs after it.
 
 ## Results
 
@@ -176,6 +196,39 @@ and augmentation, both encoders,
 and that `models/bilstm_orig.pt` still loads into the current code with the 61 classes in
 `artifacts/classes.json`. CI runs them on every push to `main`. Not covered: landmark
 extraction from video (needs the Kaggle dataset) and the live demo (needs a webcam).
+
+## Browser version and parity
+
+The [live demo](https://pajiala99.github.io/#demo-isl) runs this pipeline in the browser. `web/isl.js` uses MediaPipe
+Tasks JS 1.1.0, the same release as the Python `mediapipe` 1.1.0, with the same `.task` model files. It ports
+`features.py` line for line and runs the BiLSTM exported by `python -m isl.export_onnx` in onnxruntime-web. Three
+checks, from the inside out:
+
+| Check | Compared | Result |
+|---|---|---|
+| Export | PyTorch vs ONNX, on the features of the 182 held-out takes | Same top word on 182 of 182; largest probability difference 4.8 × 10⁻⁷ |
+| Features | `isl.js` vs `features.py`, on the cached keypoints of all 1,210 takes | Bit-identical: all 37,016,320 values |
+| End to end | The same 182 held-out clips through MediaPipe Python + numpy + PyTorch, and through MediaPipe JS + `isl.js` + onnxruntime-web in Chromium 152 | Same top word on 181 of 182 (the browser is right on all 182, Python on 181). Same frames sampled on all 182; median largest probability difference 0.0009; landmarks a median 0.005 of the frame apart |
+
+Two details made the features bit-identical. numpy rounds every float32 operation, so `isl.js` rounds with
+`Math.fround` after each one. On Apple Silicon, numpy's `np.interp` computes `slope * dx + y` as one fused
+multiply-add, which `isl.js` emulates exactly. The dataset's videos are MPEG-4 Part 2, which browsers can't decode, so
+both sides read the same H.264 copies made with macOS `avconvert`.
+
+The one disagreement is the least confident clip in the test set (`Radish/WIN_20231102_12_30_22_Pro`), a near-tie:
+Python says *cry* 36.5% over *radish* 31.8%, the browser *radish* 34.5% over *cry* 33.9%. Converting that clip to
+H.264 already flips Python's own answer (*radish* 41.6% on the original file); on the other 181 clips the copy and the
+original give Python the same word. The residual landmark differences come from the two MediaPipe builds and video
+decoders, not from the feature code, which check 2 shows is exact. Results are in
+`artifacts/onnx_export.json`, `artifacts/feature_parity.json` and `artifacts/parity.json`.
+
+```bash
+python -m isl.export_onnx                                   # 1. needs onnx + onnxruntime (best in their own env)
+python -m isl.parity features && node web/check_features.mjs     # 2.
+python -m isl.parity clips      # 3. H.264 copies of the held-out clips, and Python's answer for each
+python -m isl.parity serve      #    then open http://127.0.0.1:8765/web/parity.html and let it finish
+python -m isl.parity compare
+```
 
 ## Text and speech output
 

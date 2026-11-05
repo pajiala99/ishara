@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ISL parity check</title>
+<style>
+  :root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif; }
+  body { margin: 24px; max-width: 980px; }
+  table { border-collapse: collapse; width: 100%; font: 12.5px ui-monospace, Menlo, monospace; }
+  td, th { padding: 3px 8px; border-bottom: 1px solid #8884; text-align: left; }
+  .ok { color: #1a8f4f; } .bad { color: #d23; }
+  canvas { max-width: 220px; vertical-align: top; }
+</style>
+<h1>ISL parity check: browser pipeline</h1>
+<p>Runs every clip in <code>data/parity/clips.json</code> through MediaPipe JS + <code>isl.js</code> + onnxruntime-web,
+then posts the results to <code>python -m isl.parity serve</code> for <code>python -m isl.parity compare</code>.
+Query options: <code>?limit=N</code>, <code>?start=K</code>.</p>
+<p id="status">Loading…</p>
+<canvas id="view"></canvas>
+<table><thead><tr><th>#</th><th>clip</th><th>frames</th><th>browser top-1</th><th>p</th><th>ms</th></tr></thead><tbody id="rows"></tbody></table>
+<script type="module">
+import { loadRuntimes, fetchBytes, LandmarkExtractor, Classifier, runVideo, drawFrame, CDN } from './isl.js';
+
+const $ = s => document.querySelector(s);
+const q = new URLSearchParams(location.search);
+const state = window.__parity = { done: false, error: null, n: 0, total: 0, results: {} };
+
+function b64(f32) {
+  const u8 = new Uint8Array(f32.buffer, f32.byteOffset, f32.byteLength);
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+try {
+  const meta = await (await fetch('/data/parity/clips.json')).json();
+  const start = +(q.get('start') || 0), limit = +(q.get('limit') || meta.clips.length);
+  const clips = meta.clips.slice(start, start + limit);
+  state.total = clips.length;
+  const { mp, ort, vision } = await loadRuntimes();
+  const [hand, pose, onnx] = await Promise.all(['/models/hand_landmarker.task', '/models/pose_landmarker_lite.task', '/models/isl_bilstm.onnx'].map(u => fetchBytes(u)));
+  const clf = await Classifier.create(ort, onnx);
+  const video = document.createElement('video');
+  video.muted = true; video.playsInline = true; video.preload = 'auto';
+  const view = $('#view'), vctx = view.getContext('2d');
+  for (const [i, c] of clips.entries()) {
+    const t0 = performance.now();
+    const blob = await (await fetch(c.url)).blob();
+    const url = URL.createObjectURL(blob);
+    video.src = url;
+    const ex = await LandmarkExtractor.create(vision, mp, hand, pose);   // fresh per clip, like extract.py
+    const frames = await runVideo(ex, video, { fps: c.fps, frameCount: c.frame_count, onFrame: (fr, idx, cv) => {
+      if (idx % 12) return;
+      view.width = cv.width / 2; view.height = cv.height / 2;
+      vctx.drawImage(cv, 0, 0, view.width, view.height); drawFrame(vctx, fr, view.width, view.height);
+    } });
+    ex.close();
+    URL.revokeObjectURL(url);
+    const probs = await clf.predict(frames);
+    const flat = new Float32Array(frames.length * 260);
+    frames.forEach((fr, t) => { flat.set(fr.pose, t * 260); flat.set(fr.left, t * 260 + 132); flat.set(fr.right, t * 260 + 195); flat.set(fr.mask, t * 260 + 258); });
+    const k = probs.indexOf(Math.max(...probs)), ms = Math.round(performance.now() - t0);
+    state.results[c.name] = { probs: Array.from(probs), frames: frames.length, landmarks: b64(flat), ms };
+    state.n = i + 1;
+    $('#rows').insertAdjacentHTML('beforeend', `<tr><td>${start + i + 1}</td><td>${c.name}</td><td>${frames.length}</td><td>${meta.classes[k]}</td><td>${probs[k].toFixed(3)}</td><td>${ms}</td></tr>`);
+    $('#status').textContent = `${state.n} / ${state.total} clips`;
+  }
+  const env = { userAgent: navigator.userAgent, mediapipe: CDN.mediapipe, ort: CDN.ort, ort_version: ort.env.versions?.web, when: new Date().toISOString(), start, limit };
+  const res = await fetch('/parity/results', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ env, results: state.results }) });
+  $('#status').textContent = `Done: ${state.n} clips, results ${res.ok ? 'saved' : 'NOT saved (' + res.status + ')'}.`;
+  state.done = true;
+} catch (e) {
+  state.error = String(e && e.stack || e);
+  $('#status').innerHTML = `<span class="bad">${state.error}</span>`;
+}
+</script>
+</html>
