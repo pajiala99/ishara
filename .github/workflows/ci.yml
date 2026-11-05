@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (offline, CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      # The tests run on synthetic landmarks, so MediaPipe and OpenCV (needed only for
+      # video and webcam input) are not installed, and CPU torch skips the CUDA download.
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy pytest
+      - name: Tests (no Kaggle videos, no webcam)
+        run: pytest -q
