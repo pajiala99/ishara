@@ -1,16 +1,11 @@
 {
   "takes_per_class": 2,
-  "test_top1": 0.7142857142857143,
+  "test_top1": 0.7362637362637363,
   "top_confusions": [
     {
       "true": "knife",
       "predicted": "turtle",
       "count": 3
-    },
-    {
-      "true": "brinjal",
-      "predicted": "onion",
-      "count": 2
     },
     {
       "true": "cabbage",
@@ -23,18 +18,8 @@
       "count": 2
     },
     {
-      "true": "chilli",
-      "predicted": "radish",
-      "count": 2
-    },
-    {
       "true": "elephant",
-      "predicted": "lemon",
-      "count": 2
-    },
-    {
-      "true": "give",
-      "predicted": "monkey",
+      "predicted": "fedup",
       "count": 2
     },
     {
@@ -48,8 +33,8 @@
       "count": 2
     },
     {
-      "true": "radish",
-      "predicted": "chilli",
+      "true": "wife",
+      "predicted": "budget",
       "count": 2
     },
     {
@@ -59,17 +44,32 @@
     },
     {
       "true": "busy",
-      "predicted": "jump",
+      "predicted": "umbrella",
+      "count": 1
+    },
+    {
+      "true": "carrot",
+      "predicted": "chilli",
+      "count": 1
+    },
+    {
+      "true": "carrot",
+      "predicted": "man",
+      "count": 1
+    },
+    {
+      "true": "chilli",
+      "predicted": "man",
       "count": 1
     }
   ],
   "weakest_classes": [
     {
-      "class": "chilli",
+      "class": "knife",
       "recall": 0.0
     },
     {
-      "class": "knife",
+      "class": "pour",
       "recall": 0.0
     },
     {
@@ -77,15 +77,15 @@
       "recall": 0.0
     },
     {
-      "class": "turtle",
+      "class": "wife",
       "recall": 0.0
     },
     {
-      "class": "brinjal",
+      "class": "cabbage",
       "recall": 0.3333333333333333
     },
     {
-      "class": "cabbage",
+      "class": "carrot",
       "recall": 0.3333333333333333
     },
     {
@@ -93,11 +93,11 @@
       "recall": 0.3333333333333333
     },
     {
-      "class": "elephant",
+      "class": "come",
       "recall": 0.3333333333333333
     },
     {
-      "class": "give",
+      "class": "elephant",
       "recall": 0.3333333333333333
     },
     {

@@ -371,7 +371,7 @@ async function build() {
     if (rb) s.addImage({ path: rb, x: MX, y: 1.72, w: 7.0, h: 4.1, sizing: { type: "contain", w: 7.0, h: 4.1 } });
     body(s, [
       "The trained model was re-tested on the same clips after deliberate perturbation — each one targets a specific preprocessing claim.",
-      `Camera rotated 15°, scaled ±20%, shifted off-centre, mirrored, landmark noise added: all ${pct(rob("rotate_15"))}, unchanged from clean. The shoulder-frame normalisation does what it claims.`,
+      `Shifted off-centre or with landmark noise added: ${pct(rob("shift_10"))}, the same as clean. Camera rotated 15° or scaled ±20%: ${pct(rob("rotate_15"))}. The shoulder-frame normalisation does what it claims. Mirrored: ${pct(rob("mirror"))}.`,
       `30% of frames dropped: ${pct(rob("frame_drop_30"))} — resampling absorbs missing frames.`,
       `One hand occluded: ${pct(rob("occlude_left_hand"))}. Expected and correct — many ISL signs are two-handed, so the information is genuinely gone, and a model scoring highly here would be relying on something other than the sign.`,
     ], 7.9, 1.82, 4.8, 12);

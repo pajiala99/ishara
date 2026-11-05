@@ -15,7 +15,7 @@ Dataset: [Indian Sign Language Video Dataset](https://www.kaggle.com/datasets/pr
 |---|---|
 | SVM (RBF) on pooled features | 97.8% |
 | Random Forest on pooled features | 100.0% |
-| BiLSTM + attention (3 seeds) | 98.7% ± 1.4 |
+| BiLSTM + attention (3 seeds) | 99.6% ± 0.5 |
 
 **The standard split is saturated** — every class was recorded by one signer in a single
 ~5-minute session, so its 20 takes are near-copies and even a Random Forest hits 100%. A
@@ -25,45 +25,54 @@ benchmark every model solves cannot rank models, so the real evaluation is below
 
 | Takes/class | Train clips | Top-1 | Top-5 |
 |---|---|---|---|
-| 1 | 61 | 49.5% | 80.8% |
-| 2 | 122 | 71.4% | 95.6% |
-| 3 | 183 | 82.4% | 98.4% |
-| 5 | 305 | 94.5% | 100.0% |
-| 10 | 606 | 99.5% | 100.0% |
-| 14 | 846 | 96.7% | 100.0% |
+| 1 | 61 | 48.9% | 79.7% |
+| 2 | 122 | 73.6% | 96.2% |
+| 3 | 183 | 80.2% | 96.7% |
+| 5 | 305 | 95.6% | 99.5% |
+| 10 | 606 | 98.9% | 100.0% |
+| 14 | 846 | 98.9% | 100.0% |
 
-One example per word already gives 49.5% across 61 classes (chance 1.6%).
+One example per word already gives 48.9% across 61 classes (chance 1.6%).
 
 ### Robustness (same model, perturbed inputs)
 
 | Perturbation | Top-1 |
 |---|---|
-| clean | 96.7% |
-| mirror | 96.7% |
-| rotate 15 | 96.7% |
-| scale 20 | 96.7% |
-| shift 10 | 96.7% |
-| speed 50 | 96.7% |
-| frame drop 30 | 94.5% |
-| noise 03 | 96.7% |
-| occlude left hand | 31.9% |
+| clean | 98.9% |
+| mirror | 95.6% |
+| rotate 15 | 98.4% |
+| scale 20 | 98.4% |
+| shift 10 | 98.9% |
+| speed 50 | 98.4% |
+| frame drop 30 | 96.7% |
+| noise 03 | 98.9% |
+| occlude left hand | 25.8% |
 
-Geometry and tempo are fully absorbed by the normalisation; occluding one hand collapses
-accuracy, which is correct — many ISL signs are two-handed.
+Off-centring and landmark noise cost nothing, and rotation, scale and speed changes cost one
+clip of 182 each, so geometry and tempo are almost fully absorbed by the normalisation. A
+mirrored signer costs 3.3 points. Occluding one hand collapses accuracy, which is correct —
+many ISL signs are two-handed.
 
 ### Augmentation ablation (2 takes/class, mean of 2 seeds)
 
 | Setting | Top-1 |
 |---|---|
 | none | 83.2% |
-| full | 73.9% |
+| full | 75.5% |
 | no mirror | 86.0% |
 | geometric only | 86.5% |
-| mirror only | 74.5% |
+| mirror only | 74.7% |
 
 Mirroring *hurts* on a single-signer dataset: mirrored clips are inputs the test distribution
 never contains, and many ISL signs are not left-right symmetric. Geometric jitter and noise
 help. An augmentation is only valid if it imitates variation that exists in deployment.
+
+The BiLSTM numbers above were regenerated on 5 Nov 2026 after a bug fix: `_mirror` used to
+swap the two hands but not the pose's arms and hips, so a mirrored clip put each wrist on the
+opposite side from its hand. Every run that never mirrors reproduced its old number exactly.
+The fixed mirror still costs 10.4 points (86.0% → 75.5%; it was 12.1 before), so the
+conclusion never depended on the bug. `models/bilstm_orig.pt` was trained before the fix and
+is unchanged.
 
 ## See it working
 
@@ -160,9 +169,10 @@ pip install pytest
 pytest
 ```
 
-13 tests run in seconds on synthetic landmarks, with no dataset or camera: the feature
+14 tests run in seconds on synthetic landmarks, with no dataset or camera: the feature
 layout and its invariance to where the signer stands and how far away, the group-aware
-split (no take's tilt variants on both sides), mirroring and augmentation, both encoders,
+split (no take's tilt variants on both sides), mirroring (hands and arms swap together)
+and augmentation, both encoders,
 and that `models/bilstm_orig.pt` still loads into the current code with the 61 classes in
 `artifacts/classes.json`. CI runs them on every push to `main`. Not covered: landmark
 extraction from video (needs the Kaggle dataset) and the live demo (needs a webcam).

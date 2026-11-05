@@ -267,7 +267,7 @@ async function build() {
     const s = slide();
     header(s, "Preprocessing", "Augmentation — training set only");
     tableRows(s, ["Transform", "Range", "Real-world variation it imitates"], [
-      ["Horizontal mirror, hands swapped", "p = 0.3", "Left- vs right-dominant signers"],
+      ["Horizontal mirror, left and right swapped", "p = 0.3", "Left- vs right-dominant signers"],
       ["Rotation", "±10°", "Camera not level"],
       ["Scale", "±10%", "Distance from camera"],
       ["Translation", "±0.05", "Signer off-centre"],
@@ -277,7 +277,7 @@ async function build() {
     ], MX, 1.8, W - 2 * MX, [4.4, 2.0, 5.7]);
     card(s, MX, 5.3, W - 2 * MX, 1.35);
     s.addText([{ text: "Mirroring is not a sign flip.  ", options: { bold: true, color: ACC_D } },
-      { text: "Negating x alone would leave the left hand's data in the left-hand channel while the body is mirrored. The implementation negates x and swaps the two hand blocks, including their presence flags — otherwise a mirrored two-handed sign becomes incoherent.", options: { color: DARK } }],
+      { text: "Negating x alone would leave the left hand's data in the left-hand channel while the body is mirrored. The implementation negates x and swaps every left/right pair: the two hand blocks with their presence flags, and the shoulders, elbows, wrists and hips of the pose — otherwise a mirrored sign becomes incoherent.", options: { color: DARK } }],
       { x: MX + 0.35, y: 5.3, w: W - 2 * MX - 0.7, h: 1.35, margin: 0, fontFace: "Calibri", fontSize: 13.5,
         valign: "middle", isTextBox: true });
     s.addNotes("Validation and test clips are never augmented.");

@@ -34,7 +34,7 @@ def data_efficiency(exp, path: Path):
 
 
 def robustness(exp, path: Path):
-    labels = {"clean": "clean", "mirror": "mirrored (hands swapped)", "rotate_15": "camera rotated 15°",
+    labels = {"clean": "clean", "mirror": "mirrored (left/right swapped)", "rotate_15": "camera rotated 15°",
               "scale_20": "scale ±20%", "shift_10": "off-centre ±10%", "speed_50": "signing speed ×0.5 / ×1.5",
               "frame_drop_30": "30% frames dropped", "noise_03": "landmark noise σ=0.03",
               "occlude_left_hand": "left hand occluded"}

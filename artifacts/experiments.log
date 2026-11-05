@@ -1,26 +1,26 @@
 1210 clips | 61 classes | train 846 val 182 test 182
 
 A. data efficiency (takes per class)
-  k=1   clips=61   test top-1  49.45%  top-5  80.77%
-  k=2   clips=122  test top-1  71.43%  top-5  95.60%
-  k=3   clips=183  test top-1  82.42%  top-5  98.35%
-  k=5   clips=305  test top-1  94.51%  top-5 100.00%
-  k=10  clips=606  test top-1  99.45%  top-5 100.00%
-  k=14  clips=846  test top-1  96.70%  top-5 100.00%
+  k=1   clips=61   test top-1  48.90%  top-5  79.67%
+  k=2   clips=122  test top-1  73.63%  top-5  96.15%
+  k=3   clips=183  test top-1  80.22%  top-5  96.70%
+  k=5   clips=305  test top-1  95.60%  top-5  99.45%
+  k=10  clips=606  test top-1  98.90%  top-5 100.00%
+  k=14  clips=846  test top-1  98.90%  top-5 100.00%
 
 B. robustness of the full model
-  clean               96.70%
-  mirror              96.70%
-  rotate_15           96.70%
-  scale_20            96.70%
-  shift_10            96.70%
-  speed_50            96.70%
-  frame_drop_30       94.51%
-  noise_03            96.70%
-  occlude_left_hand   31.87%
+  clean               98.90%
+  mirror              95.60%
+  rotate_15           98.35%
+  scale_20            98.35%
+  shift_10            98.90%
+  speed_50            98.35%
+  frame_drop_30       96.70%
+  noise_03            98.90%
+  occlude_left_hand   25.82%
 
 C. augmentation ablation (2 takes per class)
-  with augmentation     71.43%
+  with augmentation     73.63%
   without augmentation  81.87%
 
-wrote /Users/hardikpajiala/Desktop/isl-include-recognition/artifacts/experiments.json
+wrote artifacts/experiments.json

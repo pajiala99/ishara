@@ -106,7 +106,7 @@ offset and speeds up convergence — the same reasoning as delta-MFCCs in speech
 Signs vary in duration but not in structure; a slow and a fast version of a sign are the same
 sign time-warped. Resampling normalises tempo and gives fixed-size tensors, which also lets the
 classical baselines consume the identical representation. Our robustness test confirms it
-works: changing signing speed by ×0.5 / ×1.5 leaves accuracy at 96.7%.
+works: changing signing speed by ×0.5 / ×1.5 costs one test clip of 182 (98.4% vs 98.9% clean).
 
 **19. What if a hand is not detected?**
 Its 63 numbers are zeroed and the presence flag goes to 0, so the model can distinguish
@@ -150,25 +150,26 @@ features. Any pair of classes differing only in movement direction is unrecovera
 ## E. Results — know these numbers
 
 **27. What are your headline results?**
-On the standard split, 98.7% ± 1.4 test top-1 over three seeds. Under reduced
-supervision: 49.5% from one take per word, 71.4% from two, 94.5% from five, across
+On the standard split, 99.6% ± 0.5 test top-1 over three seeds. Under reduced
+supervision: 48.9% from one take per word, 73.6% from two, 95.6% from five, across
 61 classes where chance is 1.6%.
 
 **28. Why report a data-efficiency curve at all?**
 Because the saturated benchmark cannot separate models, and because it answers the question a
 deployer actually asks: how many recordings do I need to add a new word? Five takes per word
-gets you to 94.5%.
+gets you to 95.6%.
 
-**29. Your k=14 point is lower than k=10 — explain.**
-Seed noise. Repeating the full-data run over three seeds gives 98.7% ± 1.4, so
-single-run differences below about 1.5 points carry no signal. We say so rather than
-cherry-picking the best seed.
+**29. How much of the curve is seed noise?**
+Repeating the full-data run over three seeds gives 99.6% ± 0.5 (98.9%, 100%, 100%), so
+single-run differences below about a point carry no signal — k=10 and k=14 tie at 98.9%.
+We say so rather than cherry-picking the best seed.
 
 **30. What does the robustness test show?**
-The trained model is re-tested on the same clips after perturbation. Rotation 15°, ±20% scale,
-±10% off-centring, mirroring and landmark noise all leave accuracy at 96.7% —
-the body-frame normalisation doing its job. Dropping 30% of frames costs little (94.5%).
-Occluding one hand collapses it to 31.9%.
+The trained model is re-tested on the same clips after perturbation. ±10% off-centring and
+landmark noise leave accuracy at 98.9%, unchanged from clean; rotation 15° and ±20% scale cost
+one clip of 182 (98.4%) — the body-frame normalisation doing its job. A mirrored signer costs
+3.3 points (95.6%). Dropping 30% of frames costs little (96.7%). Occluding one hand collapses
+it to 25.8%.
 
 **31. Why is the occlusion number so bad? Isn't that a failure?**
 No — it is the expected and correct behaviour. Many ISL signs are two-handed, so removing one
@@ -177,11 +178,14 @@ something other than the sign. It also tells us the model uses both hands rather
 onto one.
 
 **32. Your augmentation made results worse. Explain.**
-At two takes per class: 83.2% without augmentation, 73.9% with the full stack. Isolating the
-cause, mirror-only is 74.5% and everything-except-mirror is 86.0%, so mirroring alone
+At two takes per class: 83.2% without augmentation, 75.5% with the full stack. Isolating the
+cause, mirror-only is 74.7% and everything-except-mirror is 86.0%, so mirroring alone
 accounts for the loss. The dataset has one signer with a consistent dominant hand, so mirrored
 clips are inputs the test distribution never contains, and many ISL signs are not left-right
-symmetric. Geometric jitter and noise do help: 86.5% versus 83.2%.
+symmetric. Geometric jitter and noise do help: 86.5% versus 83.2%. We also tested the mirror
+itself and found a bug: it swapped the hands but not the arms, so mirrored clips were
+anatomically impossible. Fixed, it still costs 10.4 points (12.1 before), so the conclusion
+never depended on the bug.
 
 **33. Isn't a negative result a problem for your project?**
 The opposite — it is measured, explained and actionable. The general lesson is that an
@@ -190,14 +194,14 @@ were deployed for left-handed signers, mirroring would become correct, and we wo
 left-handed data rather than synthetic mirrors.
 
 **34. Where do the remaining errors fall?**
-Analysed on the 2-take model (71.4%), because the full model makes no errors to study.
-Typical confusions: "knife" → "turtle", "brinjal" → "onion", "cabbage" → "injury". They concentrate on signs sharing a handshape and body location and
+Analysed on the 2-take model (73.6%), because the full model makes too few errors to study.
+Typical confusions: "knife" → "turtle", "cabbage" → "injury", "onion" → "brinjal". They concentrate on signs sharing a handshape and body location and
 differing in a short movement or a facial marker the model never sees.
 
 **35. Why report top-5 as well as top-1?**
 In a translation aid, a short candidate list is still useful, and the top-1 / top-5 gap says
 whether errors are near-misses in a confusable cluster or total failures. At one take per word
-top-1 is 49.5% but top-5 is 80.8%.
+top-1 is 48.9% but top-5 is 79.7%.
 
 **36. Why macro-F1?**
 It averages per-class F1 without frequency weighting, so a word the model never predicts cannot

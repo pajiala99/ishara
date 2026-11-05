@@ -336,7 +336,7 @@ def augment_geometric(seq: np.ndarray, rng, rot_deg=10.0, scale_j=0.1, shift_j=0
     a legitimate augmentation - it must imitate variation that exists in reality.
 
     NOTE from our ablation: these three HELP (86.5% vs 83.2% with none). Mirroring,
-    which we also tried, HURT by ~12 points, because the dataset has one signer
+    which we also tried, HURT by ~10 points, because the dataset has one signer
     with a consistent dominant hand, so mirrored clips are inputs the test
     distribution never contains.
     """

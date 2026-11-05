@@ -96,13 +96,13 @@ const children = [
 
   slideHead(7, "Temporal resampling", "60 s"),
   say("\"Clips differ in length and people sign at different speeds, but a sign performed slowly and the same sign performed quickly are the same sign, time-warped. So every feature channel is linearly interpolated onto a fixed grid of 64 frames. That gives tempo invariance and fixed-size tensors in one step, and it lets our classical SVM and Random Forest baselines consume exactly the same representation.\""),
-  say("\"We tested that claim rather than assuming it: replaying the test clips at half speed and one-and-a-half times speed leaves accuracy at 96.7 percent, unchanged from the clean clips.\""),
+  say("\"We tested that claim rather than assuming it: replaying the test clips at half speed and one-and-a-half times speed costs one test clip of 182: 98.4 percent against 98.9 clean.\""),
   say("\"The alternative is zero-padding to the longest clip and masking. That keeps absolute duration, which we judged not to be linguistically meaningful here, and it complicates the baselines. If duration mattered for these signs, padding would be the better choice.\""),
 
   slideHead(8, "Augmentation — and the negative result", "75 s"),
   p([b("This is the slide that makes the talk memorable. Lead with the measurement.")]),
   say("\"Augmentation applies to training clips only — validation and test always see the clean pipeline, otherwise the reported accuracy would not describe real inputs. Each transform imitates a real source of variation: rotation for a camera that is not level, scaling for distance, translation for being off-centre, speed jitter, frame dropout, and coordinate noise for landmark jitter.\""),
-  say("\"Then there is mirroring, which we added because signs can be made with either dominant hand — and it made things worse. With two takes per class: 83.2 percent with no augmentation at all, 73.9 with everything switched on. So we isolated it: mirror-only is 74.5, everything-except-mirror is 86.0. Mirroring alone accounts for the whole loss.\""),
+  say("\"Then there is mirroring, which we added because signs can be made with either dominant hand — and it made things worse. With two takes per class: 83.2 percent with no augmentation at all, 75.5 with everything switched on. So we isolated it: mirror-only is 74.7, everything-except-mirror is 86.0. Mirroring alone accounts for the whole loss.\""),
   say("\"The explanation is in the dataset. It has one signer with a consistent dominant hand, so mirrored clips are inputs the test distribution never contains, and many ISL signs are not left-right symmetric anyway. The general lesson is that an augmentation is only valid if it imitates variation that actually exists in deployment. Geometric jitter and noise do help — 86.5 percent.\""),
 
   slideHead(9, "Splitting and numerical safety", "60 s"),
@@ -112,8 +112,8 @@ const children = [
   p([b("Say the limitation yourself: "), new TextRun("the split is group-aware but signer-mixed, because the dataset has one signer. A signer-independent split is impossible here and accuracy on a new signer will be lower.")]),
 
   slideHead(10, "Every invariance we claimed, measured", "60 s"),
-  say("\"Finally, we checked whether the preprocessing does what we claim. We re-tested the trained model on the same clips after deliberate perturbation, with each perturbation targeting a specific claim. Rotating the camera 15 degrees, scaling by 20 percent, shifting off-centre, mirroring, adding landmark noise — all 96.7 percent, identical to clean. That is the shoulder-frame normalisation doing its job.\""),
-  say("\"Dropping 30 percent of frames costs about two points, because resampling absorbs the gaps. Occluding one hand collapses accuracy to 31.9 percent — and that is the correct result, not a failure. Many ISL signs are two-handed, so the information is genuinely gone; a model that still scored well there would be relying on something other than the sign.\""),
+  say("\"Finally, we checked whether the preprocessing does what we claim. We re-tested the trained model on the same clips after deliberate perturbation, with each perturbation targeting a specific claim. Shifting off-centre and adding landmark noise leave accuracy at 98.9 percent, identical to clean; rotating the camera 15 degrees or scaling by 20 percent costs one clip of 182. That is the shoulder-frame normalisation doing its job. A mirrored signer costs about three points.\""),
+  say("\"Dropping 30 percent of frames costs about two points, because resampling absorbs the gaps. Occluding one hand collapses accuracy to 25.8 percent — and that is the correct result, not a failure. Many ISL signs are two-handed, so the information is genuinely gone; a model that still scored well there would be relying on something other than the sign.\""),
 
   slideHead(11, "Summary", "20 s"),
   say("\"So: 280 million pixels down to 64 by 478 features without losing the sign. Landmarks instead of pixels, shoulder-frame normalisation for signer invariance, location and handshape encoded separately with velocity explicit, a fixed 64-frame grid for tempo invariance, group-aware splitting to prevent leakage, and augmentation validated by ablation rather than assumed. Happy to go deeper on any stage.\""),
@@ -124,8 +124,8 @@ const children = [
     ["239 → 478", "Features per frame, before and after adding velocity"],
     ["27 / 84 / 126 / 2", "Pose / hands body-relative / hands wrist-local / presence flags"],
     ["64 frames", "Fixed temporal grid every clip is resampled onto"],
-    ["96.7%", "Accuracy under rotation, scale, shift, mirror, noise and speed change"],
-    ["83.2 vs 73.9 vs 86.0", "No augmentation vs all vs all-except-mirror (2 takes/class)"],
+    ["98.4–98.9%", "Accuracy under rotation, scale, shift, noise and speed change (98.9% clean)"],
+    ["83.2 vs 75.5 vs 86.0", "No augmentation vs all vs all-except-mirror (2 takes/class)"],
   ], [2700, 6660]),
 
   h1("Questions to expect"),
@@ -147,7 +147,7 @@ const children = [
     ["Do you augment the validation and test sets?",
      "No. Augmentation lives inside the training dataset only. Otherwise the reported accuracy would not describe real inputs."],
     ["How do you know your augmentations help?",
-     "We ran the ablation — that is slide 8. Most help; mirroring hurt by about 12 points and we can explain why. We report it rather than quietly dropping it."],
+     "We ran the ablation — that is slide 8. Most help; mirroring hurt by about 10 points and we can explain why. We report it rather than quietly dropping it."],
     ["How do you know there is no data leakage?",
      "The tilt variants of one take are near-duplicates, so the splitter keeps them together; the split is computed once with a fixed seed before training; the test set is read only by the evaluation script; and the baseline scaler is fitted on training data only."],
     ["Why every 3rd frame and not every 10th?",

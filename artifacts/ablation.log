@@ -1,26 +1,21 @@
   none              83.24%   [81.9, 84.6]
-  full              73.90%   [71.4, 76.4]
+  full              75.55%   [73.6, 77.5]
   no_mirror         85.99%   [85.2, 86.8]
   geometric_only    86.54%   [85.7, 87.4]
-  mirror_only       74.45%   [75.8, 73.1]
+  mirror_only       74.73%   [74.2, 75.3]
 
 seed variance at the full training set (14 takes/class)
-  seed 42: 96.70%
+  seed 42: 98.90%
   seed 7: 100.00%
-  seed 13: 99.45%
+  seed 13: 100.00%
 
-wrote /Users/hardikpajiala/Desktop/isl-include-recognition/artifacts/ablation.json
-2 takes/class -> test top-1 71.43%
+wrote artifacts/ablation.json
+2 takes/class -> test top-1 73.63%
 [
   {
     "true": "knife",
     "predicted": "turtle",
     "count": 3
-  },
-  {
-    "true": "brinjal",
-    "predicted": "onion",
-    "count": 2
   },
   {
     "true": "cabbage",
@@ -33,24 +28,29 @@ wrote /Users/hardikpajiala/Desktop/isl-include-recognition/artifacts/ablation.js
     "count": 2
   },
   {
-    "true": "chilli",
-    "predicted": "radish",
-    "count": 2
-  },
-  {
     "true": "elephant",
-    "predicted": "lemon",
-    "count": 2
-  },
-  {
-    "true": "give",
-    "predicted": "monkey",
+    "predicted": "fedup",
     "count": 2
   },
   {
     "true": "onion",
     "predicted": "brinjal",
     "count": 2
+  },
+  {
+    "true": "pour",
+    "predicted": "still",
+    "count": 2
+  },
+  {
+    "true": "wife",
+    "predicted": "budget",
+    "count": 2
+  },
+  {
+    "true": "bear",
+    "predicted": "cook",
+    "count": 1
   }
 ]
 figures written
