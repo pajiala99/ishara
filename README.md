@@ -179,3 +179,7 @@ Trained on Apple Silicon GPU via PyTorch MPS; training itself takes 2.2 minutes.
 
 The deck is generated from `artifacts/` — see [tools/README.md](tools/README.md).
 To add the unseen-signer slide: `python -m isl.record` then `python -m isl.unseen_signer`.
+
+---
+
+**Hardik Pajiala** · [LinkedIn](https://linkedin.com/in/hardik-pajiala) · [Portfolio](https://pajiala99.github.io) · [GitHub](https://github.com/pajiala99)
