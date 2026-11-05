@@ -7,6 +7,10 @@ webcam. MediaPipe's JavaScript tasks track the body and hands, `web/isl.js` comp
 `features.py`, and the BiLSTM runs as ONNX in onnxruntime-web. No video leaves the device. See
 [Browser version and parity](#browser-version-and-parity).
 
+<img src="docs/browser-demo-hello.jpg" width="530" alt="The live demo on the portfolio: a held-out clip of the sign for hello, tracked by MediaPipe, and the model's top five words with Hello at 92.0%, the same word and score Python gives for that file">
+
+*The portfolio demo on a held-out clip: Hello at 92.0%, the same word and probability as the Python pipeline on the same file.*
+
 Word-level ISL recognition from video: MediaPipe skeletal keypoints → signer-invariant
 features → BiLSTM with temporal attention → word, text and speech. Runs live on a laptop
 webcam; no server, no video leaves the machine.
