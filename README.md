@@ -1,6 +1,8 @@
-# Indian Sign Language Recognition
+# Ishara: Indian Sign Language Recognition
 
-[![ci](https://github.com/pajiala99/isl-recognition/actions/workflows/ci.yml/badge.svg)](https://github.com/pajiala99/isl-recognition/actions/workflows/ci.yml)
+*Ishara (इशारा) means "sign" or "gesture" in Hindi.*
+
+[![ci](https://github.com/pajiala99/ishara/actions/workflows/ci.yml/badge.svg)](https://github.com/pajiala99/ishara/actions/workflows/ci.yml)
 
 **Live demo: [run the model in your browser](https://pajiala99.github.io/#demo-isl)**, on held-out test clips or your
 webcam. MediaPipe's JavaScript tasks track the body and hands, `web/isl.js` computes the same features as
