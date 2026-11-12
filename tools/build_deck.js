@@ -37,7 +37,7 @@ async function icon(Comp, color, px = 256) {
 
 const pres = new pptxgen();
 pres.layout = "LAYOUT_WIDE";
-pres.title = "Indian Sign Language Recognition";
+pres.title = "Ishara: Indian Sign Language Recognition";
 
 function slide() { const s = pres.addSlide(); s.background = { color: "FFFFFF" }; return s; }
 
@@ -117,8 +117,9 @@ async function build() {
     s.addImage({ data: await icon(fa.FaSignLanguage, PANEL), x: MX + 0.26, y: 1.31, w: 0.53, h: 0.53 });
     s.addText("MINOR PROJECT  ·  COMPUTER VISION & DEEP LEARNING", { x: MX, y: 2.45, w: 9, h: 0.3,
       margin: 0, fontFace: "Calibri", fontSize: 12, bold: true, color: ACCENT, charSpacing: 3, isTextBox: true });
-    s.addText("Indian Sign Language\nRecognition", { x: MX, y: 2.85, w: 9.5, h: 1.9, margin: 0,
-      fontFace: "Cambria", fontSize: 48, bold: true, color: "FFFFFF", lineSpacingMultiple: 1.0, isTextBox: true });
+    s.addText([{ text: "Ishara", options: { fontSize: 54, breakLine: true } },
+      { text: "Indian Sign Language Recognition", options: { fontSize: 30 } }], { x: MX, y: 2.85, w: 9.5, h: 1.9, margin: 0,
+      fontFace: "Cambria", bold: true, color: "FFFFFF", lineSpacingMultiple: 1.0, isTextBox: true });
     s.addText("Real-time word-level recognition from video using MediaPipe skeletal keypoints and a BiLSTM with temporal attention",
       { x: MX, y: 4.85, w: 8.4, h: 0.8, margin: 0, fontFace: "Calibri", fontSize: 15, italic: true,
         color: "C8DEDB", isTextBox: true });

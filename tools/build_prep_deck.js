@@ -37,7 +37,7 @@ async function icon(Comp, color, px = 256) {
 
 const pres = new pptxgen();
 pres.layout = "LAYOUT_WIDE";
-pres.title = "ISL Data Preprocessing";
+pres.title = "Ishara: Data Preprocessing";
 
 function slide() { const s = pres.addSlide(); s.background = { color: "FFFFFF" }; return s; }
 
