@@ -21,8 +21,21 @@ def _body_frame(pose: np.ndarray):
     return origin, scale
 
 
-def build_frame_features(pose, left, right, mask) -> np.ndarray:
-    """(T, F_BASE) float32 feature matrix for one clip."""
+def build_frame_features(pose, left, right, mask, aspect: float | None = None) -> np.ndarray:
+    """(T, F_BASE) float32 feature matrix for one clip.
+
+    MediaPipe gives x as a fraction of the frame's width and y as a fraction of its height, so on
+    a 1920x1080 video the same body measures about twice as tall, in shoulder widths, as on a
+    640x720 one. With `aspect` (width / height) x and the hands' depth z are put in frame-height
+    units first, which makes the features the same whatever the frame shape. None keeps the
+    original behaviour, which the shipped model was trained on.
+    """
+    if aspect:
+        pose, left, right = pose.copy(), left.copy(), right.copy()
+        pose[..., 0] *= aspect
+        for hand in (left, right):
+            hand[..., 0] *= aspect
+            hand[..., 2] *= aspect
     origin, scale = _body_frame(pose)                      # (T,2), (T,1)
 
     sel = pose[:, POSE_IDX, :]                             # (T, P, 4)
@@ -49,6 +62,22 @@ def build_frame_features(pose, left, right, mask) -> np.ndarray:
     feats = np.concatenate(blocks + local_blocks + [mask], axis=-1).astype(np.float32)
     assert feats.shape[1] == F_BASE, (feats.shape, F_BASE)
     return np.nan_to_num(feats, nan=0.0, posinf=0.0, neginf=0.0)
+
+
+def trim_idle(seq: np.ndarray, margin: int = 2, min_len: int = 8) -> np.ndarray:
+    """Cut the resting frames before and after the sign.
+
+    A frame counts as signing when a wrist is above the midpoint between shoulders and hips; the
+    clip is cut to the first and last such frame, plus a small margin. Clips where that finds
+    fewer than `min_len` frames are returned unchanged.
+    """
+    pose = seq[:, :len(POSE_IDX) * 3].reshape(len(seq), len(POSE_IDX), 3)
+    wrists_y = pose[:, [POSE_IDX.index(15), POSE_IDX.index(16)], 1].min(1)
+    hips_y = pose[:, [POSE_IDX.index(23), POSE_IDX.index(24)], 1].mean(1)
+    active = np.flatnonzero(wrists_y < np.median(hips_y) / 2)
+    if len(active) == 0 or active[-1] - active[0] + 1 < min_len:
+        return seq
+    return seq[max(0, active[0] - margin): active[-1] + margin + 1]
 
 
 def resample(seq: np.ndarray, length: int = SEQ_LEN) -> np.ndarray:

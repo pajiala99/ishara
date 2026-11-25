@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import Dataset
 
 from .config import DATA_KP, SEQ_LEN, N_HAND, POSE_IDX
-from .features import build_frame_features, resample, with_deltas
+from .features import build_frame_features, resample, trim_idle, with_deltas
 
 
 @dataclass
@@ -72,10 +72,20 @@ def stratified_split(samples: list[Sample], val_frac: float, test_frac: float, s
     return train, val, test
 
 
-def load_sequence(path: Path) -> np.ndarray:
-    """.npz of raw landmarks -> (T, F_BASE) engineered features."""
+def load_sequence(path: Path, aspect_correct: bool = False, trim: bool = False) -> np.ndarray:
+    """.npz of raw landmarks -> (T, F_BASE) engineered features.
+
+    aspect_correct puts x in frame-height units (needs the frame size isl.extract now stores);
+    trim cuts the resting frames before and after the sign. Both default off, as the shipped model
+    was trained without them."""
     with np.load(path, allow_pickle=False) as z:
-        return build_frame_features(z["pose"], z["left"], z["right"], z["mask"])
+        aspect = None
+        if aspect_correct:
+            if "width" not in z.files:
+                raise ValueError(f"{path} has no frame size - run tools/add_frame_size.py")
+            aspect = float(z["width"]) / float(z["height"])
+        seq = build_frame_features(z["pose"], z["left"], z["right"], z["mask"], aspect)
+    return trim_idle(seq) if trim else seq
 
 
 # ----------------------------------------------------------------- augmentation
@@ -153,8 +163,9 @@ def augment(seq: np.ndarray, cfg: dict, rng) -> np.ndarray:
 
 class ISLSequenceDataset(Dataset):
     def __init__(self, samples, classes, seq_len=SEQ_LEN, train=False,
-                 aug_cfg=None, seed=0, cache=True):
+                 aug_cfg=None, seed=0, cache=True, aspect_correct=False, trim=False):
         self.samples = samples
+        self.load_kw = {"aspect_correct": aspect_correct, "trim": trim}
         self.classes = classes
         self.cls_to_idx = {c: i for i, c in enumerate(classes)}
         self.seq_len = seq_len
@@ -169,7 +180,7 @@ class ISLSequenceDataset(Dataset):
     def raw(self, i: int) -> np.ndarray:
         if self._cache is not None and i in self._cache:
             return self._cache[i]
-        seq = load_sequence(self.samples[i].path)
+        seq = load_sequence(self.samples[i].path, **self.load_kw)
         if self._cache is not None:
             self._cache[i] = seq
         return seq

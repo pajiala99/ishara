@@ -45,8 +45,12 @@ def _worker(args) -> tuple[str, str]:
     try:
         with LandmarkExtractor() as ex:
             pose, left, right, mask, fps = ex.run_video(video, stride=stride)
+        import cv2                                   # frame size, for the aspect correction in features.py
+        cap = cv2.VideoCapture(str(video))
+        width, height = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
         np.savez_compressed(dest, pose=pose, left=left, right=right, mask=mask,
-                            fps=fps, label=label_of(video, root),
+                            fps=fps, width=width, height=height, label=label_of(video, root),
                             category=video.relative_to(root).parts[0], source=video.name)
         return str(video), "ok"
     except Exception:

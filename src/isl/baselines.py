@@ -20,8 +20,8 @@ from .dataset import index_keypoints, load_sequence, stratified_split
 from .features import pooled_stats, resample, with_deltas
 
 
-def featurise(samples, seq_len):
-    X = np.stack([pooled_stats(with_deltas(resample(load_sequence(s.path), seq_len)))
+def featurise(samples, seq_len, **load_kw):
+    X = np.stack([pooled_stats(with_deltas(resample(load_sequence(s.path, **load_kw), seq_len)))
                   for s in samples])
     y = np.array([s.label for s in samples])
     return X, y
