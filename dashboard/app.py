@@ -143,9 +143,10 @@ with tabs[1]:
 
 # ------------------------------------------------------------------ model comparison
 with tabs[2]:
-    has_comb = read("comparison_combined.json") is not None
-    tag = st.radio("Dataset", ["kaggle61", "combined"], index=1 if has_comb else 0, horizontal=True,
-                   format_func={"kaggle61": "Kaggle, 61 words (one signer)", "combined": "Combined, 316 words"}.get)
+    options = {"kaggle61": "Kaggle, 61 words (one signer)",
+               "combined_partial": "Combined, early (INCLUDE partly downloaded)", "combined": "Combined, 316 words"}
+    latest = max((i for i, t in enumerate(options) if read(f"comparison_{t}.json")), default=0)
+    tag = st.radio("Dataset", list(options), index=latest, horizontal=True, format_func=options.get)
     res, meta = comparison(tag)
     if not res:
         st.info("The combined comparison starts when the INCLUDE download finishes.")
