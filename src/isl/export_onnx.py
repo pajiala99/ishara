@@ -1,11 +1,13 @@
-"""Export the trained BiLSTM to ONNX for the browser demo, and check it against PyTorch.
+"""Export the shipped model to ONNX for the browser demo, and check it against PyTorch.
 
-    python -m isl.export_onnx                         # models/bilstm_orig.pt -> models/isl_bilstm.onnx
+    python -m isl.export_onnx                         # models/isl_transformer.pt -> models/isl_transformer.onnx
+    python -m isl.export_onnx --ckpt models/bilstm_orig.pt          # the original 61-word BiLSTM
     python -m isl.export_onnx --out ../hunter-portfolio/assets/isl
 
 The graph takes the same (batch, 64, 478) feature tensor as the PyTorch model and returns
-softmax probabilities, so the browser only has to reproduce features.py. The check runs every
-held-out test clip through both runtimes and fails if any top-1 prediction differs.
+softmax probabilities, so the browser only has to reproduce features.py (with the aspect fix
+when the checkpoint asks for it; isl_meta.json says so). The check runs every held-out test clip
+of the model's own split through both runtimes and fails if any top-1 prediction differs.
 """
 from __future__ import annotations
 
@@ -18,11 +20,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .config import ARTIFACTS, DATA_KP, F_BASE, F_TOTAL, MODELS, N_HAND, POSE_IDX, SEQ_LEN, TrainConfig
-from .dataset import ISLSequenceDataset, index_keypoints, stratified_split
-from .models import build_model
+from .config import ARTIFACTS, F_BASE, F_TOTAL, MODELS, N_HAND, POSE_IDX, SEQ_LEN, TrainConfig
+from .dataset import ISLSequenceDataset
+from .shipped import SHIPPED, held_out, load_model
 
-ONNX_NAME = "isl_bilstm.onnx"
 OPSET = 17
 IR_VERSION = 8          # onnxruntime-web reads IR 8 everywhere; newer onnx defaults higher
 
@@ -37,10 +38,8 @@ class WithSoftmax(nn.Module):
 
 
 def load(ckpt: Path):
-    state = torch.load(ckpt, map_location="cpu", weights_only=False)
-    model = build_model(state["arch"], len(state["classes"]), TrainConfig())
-    model.load_state_dict(state["model"])
-    return model.eval(), state["classes"]
+    model, classes, _ = load_model(ckpt)
+    return model, classes
 
 
 def export(model, path: Path):
@@ -58,13 +57,13 @@ def export(model, path: Path):
     onnx.save(proto, str(path))
 
 
-def check(model, path: Path, classes) -> dict:
+def check(model, path: Path, classes, state) -> dict:
     """Every held-out test clip through PyTorch (CPU) and onnxruntime; compare the outputs."""
     import onnxruntime as ort
 
     cfg = TrainConfig()
-    _, _, test_s = stratified_split(index_keypoints([DATA_KP]), cfg.val_frac, cfg.test_frac, cfg.seed)
-    ds = ISLSequenceDataset(test_s, classes, cfg.seq_len)
+    test_s = held_out(state)
+    ds = ISLSequenceDataset(test_s, classes, cfg.seq_len, aspect_correct=bool(state.get("aspect")))
     x = torch.stack([ds[i][0] for i in range(len(ds))])
     y = np.array([ds[i][1] for i in range(len(ds))])
     with torch.no_grad():
@@ -83,21 +82,23 @@ def check(model, path: Path, classes) -> dict:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ckpt", type=Path, default=MODELS / "bilstm_orig.pt")
+    ap.add_argument("--ckpt", type=Path, default=SHIPPED)
     ap.add_argument("--out", type=Path, default=MODELS, help="folder for the .onnx and its metadata")
     a = ap.parse_args()
 
-    model, classes = load(a.ckpt)
+    model, classes, state = load_model(a.ckpt)
+    onnx_name = f"isl_{state['arch']}.onnx"
     a.out.mkdir(parents=True, exist_ok=True)
-    path = a.out / ONNX_NAME
+    path = a.out / onnx_name
     export(model, path)
-    report = check(model, path, classes)
+    report = check(model, path, classes, state)
     print(json.dumps(report, indent=2))
     if report["top1_agree"] != report["test_clips"]:
         raise SystemExit("ONNX and PyTorch disagree on a held-out clip")
 
     meta = {
-        "model": ONNX_NAME, "source_checkpoint": a.ckpt.name,
+        "model": onnx_name, "arch": state["arch"], "source_checkpoint": a.ckpt.name,
+        "aspect_correct": bool(state.get("aspect")),
         "source_sha256": hashlib.sha256(a.ckpt.read_bytes()).hexdigest(),
         "onnx_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "opset": OPSET, "input": ["batch", SEQ_LEN, F_TOTAL], "classes": classes,

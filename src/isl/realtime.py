@@ -1,6 +1,7 @@
 """Live demo: webcam -> landmarks -> sliding-window prediction -> text + speech.
 
-    python -m isl.realtime --ckpt models/bilstm_orig.pt --speak
+    python -m isl.realtime --speak                                 # the 315-word Transformer
+    python -m isl.realtime --ckpt models/bilstm_orig.pt --speak   # the original 61-word BiLSTM
 
 Recognised words are spoken as they are confirmed and appended to a sentence line at
 the bottom of the window, so a sequence of signs builds a sentence you can replay.
@@ -17,10 +18,10 @@ import cv2
 import numpy as np
 import torch
 
-from .config import MODELS, SEQ_LEN, TrainConfig
+from .config import SEQ_LEN, TrainConfig
 from .features import build_frame_features, resample, with_deltas
 from .keypoints import LandmarkExtractor
-from .models import build_model
+from .shipped import SHIPPED, aspect_of, load_model
 from .speech import Speaker
 from .train import device_auto
 
@@ -57,7 +58,7 @@ def draw(frame, label, conf, threshold, sentence, muted, voice):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ckpt", type=Path, default=MODELS / "bilstm_orig.pt")
+    ap.add_argument("--ckpt", type=Path, default=SHIPPED)
     ap.add_argument("--camera", type=int, default=0)
     ap.add_argument("--window", type=int, default=SEQ_LEN)
     ap.add_argument("--stride", type=int, default=5, help="predict every N frames")
@@ -69,12 +70,8 @@ def main():
     ap.add_argument("--rate", type=int, default=170)
     args = ap.parse_args()
 
-    state = torch.load(args.ckpt, map_location="cpu", weights_only=False)
-    classes, cfg = state["classes"], TrainConfig()
-    device = device_auto()
-    model = build_model(state["arch"], len(classes), cfg).to(device)
-    model.load_state_dict(state["model"])
-    model.eval()
+    cfg, device = TrainConfig(), device_auto()
+    model, classes, state = load_model(args.ckpt, device)
 
     speaker = Speaker(enabled=args.speak, voice=args.voice, rate=args.rate)
     print(f"{len(classes)} classes on {device} | speech: {speaker.describe()}")
@@ -83,6 +80,8 @@ def main():
     if not cap.isOpened():
         raise SystemExit("cannot open the camera - grant camera access and retry")
     cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
+    # the 315-word model reads x in frame-height units, so it needs the camera's frame shape
+    aspect = aspect_of(state, cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     buf = {k: deque(maxlen=args.window) for k in ("pose", "left", "right", "mask")}
     sentence: list[str] = []
@@ -105,7 +104,7 @@ def main():
 
                 if len(buf["pose"]) == args.window and i % args.stride == 0:
                     seq = build_frame_features(np.stack(buf["pose"]), np.stack(buf["left"]),
-                                               np.stack(buf["right"]), np.stack(buf["mask"]))
+                                               np.stack(buf["right"]), np.stack(buf["mask"]), aspect)
                     x = torch.from_numpy(with_deltas(resample(seq, cfg.seq_len)))[None].to(device)
                     with torch.no_grad():
                         prob = model(x).softmax(-1)[0].cpu().numpy()

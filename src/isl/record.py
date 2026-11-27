@@ -166,7 +166,7 @@ def main():
 
     n = len(list(OUT.rglob("*.mp4")))
     print(f"\n{n} clips in {OUT}")
-    print("now run:  python -m isl.unseen_signer --ckpt models/bilstm_orig.pt")
+    print("now run:  python -m isl.unseen_signer")
 
 
 if __name__ == "__main__":

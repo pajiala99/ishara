@@ -1,6 +1,7 @@
 // Check 2 of isl.parity: the JavaScript feature code against features.py, bit for bit.
 //
 //   python -m isl.parity features && node web/check_features.mjs
+//   python -m isl.parity features --aspect && node web/check_features.mjs   (the 315-word model's features)
 //
 // For every clip's cached landmarks, isl.js builds the (64, 478) model input and it is compared
 // with numpy's, float by float. Exit code 1 if any clip differs.
@@ -20,7 +21,7 @@ index.clips.forEach((c, i) => {
     const row = raw.subarray(c.raw_offset + t * F, c.raw_offset + (t + 1) * F);
     frames.push({ pose: row.subarray(0, 132), left: row.subarray(132, 195), right: row.subarray(195, 258), mask: row.subarray(258, 260) });
   }
-  const js = framesToInput(frames), py = xs.subarray(i * X, (i + 1) * X);
+  const js = framesToInput(frames, c.aspect ?? null), py = xs.subarray(i * X, (i + 1) * X);
   const jb = new Uint32Array(js.buffer), pb = new Uint32Array(py.slice().buffer);
   let diff = 0;
   for (let k = 0; k < X; k++) {
@@ -29,7 +30,7 @@ index.clips.forEach((c, i) => {
   if (diff === 0) identical++; else differingValues += diff;
 });
 
-const report = { clips: index.clips.length, bit_identical_clips: identical, differing_values: differingValues,
+const report = { aspect_fix: index.clips.some(c => c.aspect), clips: index.clips.length, bit_identical_clips: identical, differing_values: differingValues,
   values_compared: index.clips.length * X, max_abs_diff: maxAbs };
 console.log(JSON.stringify(report, null, 2));
 writeFileSync(new URL('../artifacts/feature_parity.json', import.meta.url), JSON.stringify(report, null, 2) + '\n');

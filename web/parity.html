@@ -38,7 +38,8 @@ try {
   const clips = meta.clips.slice(start, start + limit);
   state.total = clips.length;
   const { mp, ort, vision } = await loadRuntimes();
-  const [hand, pose, onnx] = await Promise.all(['/models/hand_landmarker.task', '/models/pose_landmarker_lite.task', '/models/isl_bilstm.onnx'].map(u => fetchBytes(u)));
+  const model = meta.model || 'isl_bilstm.onnx';
+  const [hand, pose, onnx] = await Promise.all(['/models/hand_landmarker.task', '/models/pose_landmarker_lite.task', '/models/' + model].map(u => fetchBytes(u)));
   const clf = await Classifier.create(ort, onnx);
   const video = document.createElement('video');
   video.muted = true; video.playsInline = true; video.preload = 'auto';
@@ -56,7 +57,7 @@ try {
     } });
     ex.close();
     URL.revokeObjectURL(url);
-    const probs = await clf.predict(frames);
+    const probs = await clf.predict(frames, meta.aspect_correct ? video.videoWidth / video.videoHeight : null);
     const flat = new Float32Array(frames.length * 260);
     frames.forEach((fr, t) => { flat.set(fr.pose, t * 260); flat.set(fr.left, t * 260 + 132); flat.set(fr.right, t * 260 + 195); flat.set(fr.mask, t * 260 + 258); });
     const k = probs.indexOf(Math.max(...probs)), ms = Math.round(performance.now() - t0);
@@ -65,7 +66,7 @@ try {
     $('#rows').insertAdjacentHTML('beforeend', `<tr><td>${start + i + 1}</td><td>${c.name}</td><td>${frames.length}</td><td>${meta.classes[k]}</td><td>${probs[k].toFixed(3)}</td><td>${ms}</td></tr>`);
     $('#status').textContent = `${state.n} / ${state.total} clips`;
   }
-  const env = { userAgent: navigator.userAgent, mediapipe: CDN.mediapipe, ort: CDN.ort, ort_version: ort.env.versions?.web, when: new Date().toISOString(), start, limit };
+  const env = { model, aspect_correct: !!meta.aspect_correct, userAgent: navigator.userAgent, mediapipe: CDN.mediapipe, ort: CDN.ort, ort_version: ort.env.versions?.web, when: new Date().toISOString(), start, limit };
   const res = await fetch('/parity/results', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ env, results: state.results }) });
   $('#status').textContent = `Done: ${state.n} clips, results ${res.ok ? 'saved' : 'NOT saved (' + res.status + ')'}.`;
   state.done = true;

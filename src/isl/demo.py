@@ -16,17 +16,19 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .config import DATA_KP, MODELS, ROOT, TrainConfig
-from .dataset import index_keypoints, load_sequence, stratified_split
+from .config import DATA_KP, ROOT, TrainConfig
+from .dataset import load_sequence
 from .features import build_frame_features, resample, with_deltas
-from .models import build_model
+from .shipped import SHIPPED, aspect_of, held_out, load_model, video_size
 from .train import device_auto
 
 VIDEOS = ROOT / "data" / "videos" / "Video_Dataset" / "Video_Dataset"
 
 
 def video_for(npz: Path) -> Path | None:
-    """Map a cached landmark file back to the video it came from."""
+    """Map a cached landmark file back to the video it came from (Kaggle clips; None for others)."""
+    if DATA_KP not in npz.parents:
+        return None
     rel = npz.relative_to(DATA_KP)
     cand = VIDEOS / rel.with_suffix(".mp4")
     return cand if cand.exists() else None
@@ -76,7 +78,7 @@ def play(video: Path, truth: str, top5, correct: bool, writer=None, show=True):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ckpt", type=Path, default=MODELS / "bilstm_orig.pt")
+    ap.add_argument("--ckpt", type=Path, default=SHIPPED)
     ap.add_argument("--random", type=int, default=10, help="how many held-out clips to test")
     ap.add_argument("--word", default=None, help="restrict to one word class")
     ap.add_argument("--video", type=Path, default=None, help="predict on any video file")
@@ -87,11 +89,8 @@ def main():
     ap.add_argument("--seed", type=int, default=None)
     a = ap.parse_args()
 
-    state = torch.load(a.ckpt, map_location="cpu", weights_only=False)
-    classes, cfg = state["classes"], TrainConfig()
-    device = device_auto()
-    model = build_model(state["arch"], len(classes), cfg).to(device)
-    model.load_state_dict(state["model"]); model.eval()
+    cfg, device = TrainConfig(), device_auto()
+    model, classes, state = load_model(a.ckpt, device)
     from .speech import Speaker
     speaker = Speaker(enabled=a.speak)
     print(f"loaded {a.ckpt.name}: {state['arch']}, {len(classes)} classes, device {device}"
@@ -102,14 +101,14 @@ def main():
         from .keypoints import LandmarkExtractor
         with LandmarkExtractor() as ex:
             pose, left, right, mask, _ = ex.run_video(a.video, stride=3)
-        top5 = predict(model, device, build_frame_features(pose, left, right, mask), classes, cfg.seq_len)
+        aspect = aspect_of(state, *video_size(a.video))
+        top5 = predict(model, device, build_frame_features(pose, left, right, mask, aspect), classes, cfg.seq_len)
         print(f"{a.video.name}")
         for i, (c, p) in enumerate(top5, 1):
             print(f"  {i}. {c.replace('_',' '):<22} {p*100:5.1f}%")
         return
 
-    samples = index_keypoints([DATA_KP])
-    _, _, test_s = stratified_split(samples, cfg.val_frac, cfg.test_frac, cfg.seed)
+    test_s = held_out(state)
     if a.word:
         key = a.word.strip().lower().replace(" ", "_")
         test_s = [s for s in test_s if s.label == key]
@@ -126,7 +125,8 @@ def main():
         writer = cv2.VideoWriter(str(a.save), cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (640, 720))
     try:
         for s in picks:
-            top5 = predict(model, device, load_sequence(s.path), classes, cfg.seq_len)
+            top5 = predict(model, device, load_sequence(s.path, aspect_correct=bool(state.get("aspect"))),
+                           classes, cfg.seq_len)
             ok = top5[0][0] == s.label
             hits += ok
             print(f"{'OK ' if ok else 'X  '}truth {s.label.replace('_',' '):<20} -> "

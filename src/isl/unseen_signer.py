@@ -1,9 +1,10 @@
 """Protocol D: test the trained model on a signer it has never seen (you).
 
 Extracts landmarks from data/my_clips/<Word>/*.mp4, runs the trained classifier over
-all 61 classes, and reports top-1 / top-5 with a per-clip table and a slide figure.
+all the model's classes, and reports top-1 / top-5 with a per-clip table and a slide figure.
 
-    python -m isl.unseen_signer --ckpt models/bilstm_orig.pt
+    python -m isl.unseen_signer                               # the shipped 315-word Transformer
+    python -m isl.unseen_signer --ckpt models/bilstm_orig.pt  # the original 61-word BiLSTM
 """
 from __future__ import annotations
 
@@ -17,9 +18,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from .config import ARTIFACTS, MODELS, ROOT, TrainConfig
+from .config import ARTIFACTS, ROOT, TrainConfig
 from .features import build_frame_features, resample, with_deltas
-from .models import build_model
+from .shipped import SHIPPED, aspect_of, load_model, video_size
 from .train import device_auto
 
 CLIPS = ROOT / "data" / "my_clips"
@@ -30,7 +31,7 @@ def label_from_dir(name: str) -> str:
     return name.strip().lower().replace(" ", "_")
 
 
-def figure(rows, acc1, acc5, path: Path):
+def figure(rows, acc1, acc5, path: Path, n_classes: int = 61):
     fig, ax = plt.subplots(figsize=(7.6, max(3.0, 0.42 * len(rows) + 1.6)))
     words = [r["word"] for r in rows]
     conf = [r["confidence"] * 100 for r in rows]
@@ -44,14 +45,14 @@ def figure(rows, acc1, acc5, path: Path):
     ax.invert_yaxis(); ax.set_xlim(0, 100)
     ax.set_xlabel("model confidence in its top prediction (%)")
     ax.set_title(f"Unseen signer — top-1 {acc1*100:.0f}%, top-5 {acc5*100:.0f}%  "
-                 f"({len(rows)} clips, 61-way)", fontsize=11)
+                 f"({len(rows)} clips, {n_classes}-way)", fontsize=11)
     ax.grid(axis="x", alpha=.25); ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout(); fig.savefig(path, dpi=160); plt.close(fig)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--ckpt", type=Path, default=MODELS / "bilstm_orig.pt")
+    ap.add_argument("--ckpt", type=Path, default=SHIPPED)
     ap.add_argument("--clips", type=Path, default=CLIPS)
     ap.add_argument("--stride", type=int, default=3)
     a = ap.parse_args()
@@ -60,11 +61,8 @@ def main():
     if not videos:
         raise SystemExit(f"no clips in {a.clips} - record some first: python -m isl.record")
 
-    state = torch.load(a.ckpt, map_location="cpu", weights_only=False)
-    classes, cfg = state["classes"], TrainConfig()
-    device = device_auto()
-    model = build_model(state["arch"], len(classes), cfg).to(device)
-    model.load_state_dict(state["model"]); model.eval()
+    cfg, device = TrainConfig(), device_auto()
+    model, classes, state = load_model(a.ckpt, device)
     idx = {c: i for i, c in enumerate(classes)}
 
     from .keypoints import LandmarkExtractor
@@ -76,7 +74,7 @@ def main():
                 print(f"skip {v.name}: '{truth}' is not a training class")
                 continue
             pose, left, right, mask, _ = ex.run_video(v, stride=a.stride)
-            seq = build_frame_features(pose, left, right, mask)
+            seq = build_frame_features(pose, left, right, mask, aspect_of(state, *video_size(v)))
             x = torch.from_numpy(with_deltas(resample(seq, cfg.seq_len)))[None].to(device)
             with torch.no_grad():
                 prob = model(x).softmax(-1)[0].cpu().numpy()
@@ -97,7 +95,7 @@ def main():
     words = sorted({r["word"] for r in rows})
     per_word = {w: float(np.mean([r["correct"] for r in rows if r["word"] == w])) for w in words}
     print(f"\nunseen signer: top-1 {acc1*100:.1f}%  top-5 {acc5*100:.1f}%  "
-          f"over {len(rows)} clips of {len(words)} words (61-way, chance 1.6%)")
+          f"over {len(rows)} clips of {len(words)} words ({len(classes)}-way, chance {100 / len(classes):.1f}%)")
     for w, s in per_word.items():
         print(f"  {w:<22} {s*100:5.1f}%")
 
@@ -105,7 +103,7 @@ def main():
     (ARTIFACTS / "unseen_signer.json").write_text(json.dumps(
         {"top1": acc1, "top5": acc5, "n_clips": len(rows), "n_words": len(words),
          "per_word": per_word, "clips": rows}, indent=2))
-    figure(rows, acc1, acc5, ARTIFACTS / "unseen_signer.png")
+    figure(rows, acc1, acc5, ARTIFACTS / "unseen_signer.png", len(classes))
     print("wrote artifacts/unseen_signer.json and .png")
 
 

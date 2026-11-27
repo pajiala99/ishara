@@ -9,6 +9,7 @@ Three checks, from the inside out:
               MediaPipe JS + isl.js + onnxruntime-web in a real browser   (clips, serve, compare)
 
     python -m isl.parity features              # dump landmarks + numpy inputs for check 2
+    python -m isl.parity features --aspect     # ...with the aspect fix, Kaggle + every 4th INCLUDE clip
     node web/check_features.mjs
     python -m isl.parity clips                 # held-out test clips -> H.264 + Python reference
     python -m isl.parity serve                 # open http://127.0.0.1:8765/web/parity.html
@@ -33,13 +34,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .config import ARTIFACTS, DATA_KP, MODELS, ROOT, SEQ_LEN, TrainConfig
-from .dataset import index_keypoints, stratified_split
+from .config import ARTIFACTS, DATA_KP, MODELS, ROOT, SEQ_LEN
+from .dataset import index_keypoints
 from .demo import video_for
-from .export_onnx import load
+from .shipped import SHIPPED, aspect_of, held_out, load_model, video_size
 from .features import build_frame_features, resample, with_deltas
 
 PARITY = ROOT / "data" / "parity"
+INCLUDE_KP = ROOT / "data" / "include" / "keypoints"
 PRESET = "PresetMediumQuality"      # H.264, 428x480 for these clips, ~350 KB each
 FRAME_FLOATS = 33 * 4 + 21 * 3 * 2 + 2   # pose, left, right, mask = 260 per frame
 
@@ -54,15 +56,21 @@ def flat_frames(pose, left, right, mask) -> np.ndarray:
 def cmd_features(a):
     out = PARITY / "features"
     out.mkdir(parents=True, exist_ok=True)
+    samples = index_keypoints([DATA_KP])
+    if a.aspect:
+        # INCLUDE's 16:9 frames are where the aspect fix changes the most; every 4th clip keeps the dump small
+        samples += index_keypoints([INCLUDE_KP], min_per_class=1)[::4]
     index, raw_off, n = [], 0, 0
     with open(out / "raw.f32", "wb") as raw, open(out / "x.f32", "wb") as xs:
-        for s in index_keypoints([DATA_KP]):
+        for s in samples:
             with np.load(s.path, allow_pickle=False) as z:
                 pose, left, right, mask = z["pose"], z["left"], z["right"], z["mask"]
-            x = with_deltas(resample(build_frame_features(pose, left, right, mask), SEQ_LEN))
+                aspect = float(z["width"]) / float(z["height"]) if a.aspect else None
+            x = with_deltas(resample(build_frame_features(pose, left, right, mask, aspect), SEQ_LEN))
             raw.write(flat_frames(pose, left, right, mask).tobytes())
             xs.write(np.ascontiguousarray(x, np.float32).tobytes())
-            index.append({"clip": str(s.path.relative_to(DATA_KP)), "frames": len(pose), "raw_offset": raw_off})
+            index.append({"clip": str(s.path.relative_to(ROOT)), "frames": len(pose), "raw_offset": raw_off,
+                          "aspect": aspect})
             raw_off += len(pose) * FRAME_FLOATS
             n += 1
     (out / "index.json").write_text(json.dumps({"frame_floats": FRAME_FLOATS, "x_floats": SEQ_LEN * 478, "clips": index}))
@@ -77,8 +85,9 @@ def transcode(src: Path, dst: Path):
                        check=True, capture_output=True)
 
 
-def python_reference(model, video: Path):
-    """The Python pipeline exactly as demo.py --video runs it: fresh extractor, every 3rd frame."""
+def python_reference(model, video: Path, state: dict | None = None):
+    """The Python pipeline exactly as demo.py --video runs it: fresh extractor, every 3rd frame,
+    and the aspect fix from this file's own frame size when the model uses it."""
     import cv2
     from .keypoints import LandmarkExtractor
 
@@ -89,18 +98,19 @@ def python_reference(model, video: Path):
     while cap.read()[0]:
         frame_count += 1
     cap.release()
-    x = torch.from_numpy(with_deltas(resample(build_frame_features(pose, left, right, mask), SEQ_LEN)))[None]
+    aspect = aspect_of(state or {}, *video_size(video))
+    x = torch.from_numpy(with_deltas(resample(build_frame_features(pose, left, right, mask, aspect), SEQ_LEN)))[None]
     with torch.no_grad():
         probs = model(x).softmax(-1)[0].numpy()
     return probs, flat_frames(pose, left, right, mask), fps, frame_count
 
 
 def cmd_clips(a):
-    cfg = TrainConfig()
-    _, _, test_s = stratified_split(index_keypoints([DATA_KP]), cfg.val_frac, cfg.test_frac, cfg.seed)
+    model, classes, state = load_model(a.ckpt)
+    # the model's own held-out clips, Kaggle ones only: their licence (MIT) lets the portfolio show them
+    test_s = held_out(state, kaggle_only=True)
     if a.limit:
         test_s = test_s[: a.limit]
-    model, classes = load(a.ckpt)
     (PARITY / "python").mkdir(parents=True, exist_ok=True)
     clips, ref = [], {}
     t0 = time.time()
@@ -109,8 +119,8 @@ def cmd_clips(a):
         rel = s.path.relative_to(DATA_KP).with_suffix(".mp4")
         dst = PARITY / "clips" / rel
         transcode(src, dst)
-        probs, frames, fps, n = python_reference(model, dst)
-        probs_orig, _, _, _ = python_reference(model, src)
+        probs, frames, fps, n = python_reference(model, dst, state)
+        probs_orig, _, _, _ = python_reference(model, src, state)
         name = str(rel)
         np.save(PARITY / "python" / (name.replace("/", "__") + ".npy"), frames)
         clips.append({"name": name, "url": f"/data/parity/clips/{rel.as_posix()}", "fps": fps, "frame_count": n})
@@ -119,7 +129,11 @@ def cmd_clips(a):
                      "p_top1_original_file": float(probs_orig.max())}
         print(f"[{i}/{len(test_s)}] {name}: {classes[int(probs.argmax())]} {probs.max():.3f} "
               f"(original file: {classes[int(probs_orig.argmax())]})", flush=True)
-    (PARITY / "clips.json").write_text(json.dumps({"classes": classes, "clips": clips}, indent=1))
+    onnx_meta = json.loads((MODELS / "isl_meta.json").read_text())
+    if onnx_meta["source_checkpoint"] != a.ckpt.name:
+        raise SystemExit(f"models/isl_meta.json is for {onnx_meta['source_checkpoint']}: run isl.export_onnx --ckpt {a.ckpt}")
+    (PARITY / "clips.json").write_text(json.dumps({"classes": classes, "model": onnx_meta["model"],
+                                                   "aspect_correct": bool(state.get("aspect")), "clips": clips}, indent=1))
     (PARITY / "python.json").write_text(json.dumps(ref))
     print(f"{len(clips)} clips in {time.time() - t0:.0f} s -> {PARITY}")
 
@@ -224,9 +238,10 @@ def cmd_compare(a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("features")
+    fe = sub.add_parser("features")
+    fe.add_argument("--aspect", action="store_true", help="the aspect fix the 315-word model uses")
     c = sub.add_parser("clips")
-    c.add_argument("--ckpt", type=Path, default=MODELS / "bilstm_orig.pt")
+    c.add_argument("--ckpt", type=Path, default=SHIPPED)
     c.add_argument("--limit", type=int, default=0)
     s = sub.add_parser("serve")
     s.add_argument("--port", type=int, default=8765)

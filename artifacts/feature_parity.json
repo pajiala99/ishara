@@ -1,7 +1,8 @@
 {
-  "clips": 1210,
-  "bit_identical_clips": 1210,
+  "aspect_fix": true,
+  "clips": 2281,
+  "bit_identical_clips": 2281,
   "differing_values": 0,
-  "values_compared": 37016320,
+  "values_compared": 69780352,
   "max_abs_diff": 0
 }

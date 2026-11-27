@@ -142,7 +142,7 @@ async function build() {
     s.addText([{ text: "Ishara", options: { fontSize: 54, breakLine: true } },
       { text: "Indian Sign Language Recognition", options: { fontSize: 30 } }], { x: MX, y: 2.85, w: 9.5, h: 1.9, margin: 0,
       fontFace: "Cambria", bold: true, color: "FFFFFF", lineSpacingMultiple: 1.0, isTextBox: true });
-    s.addText("Real-time word-level recognition from video using MediaPipe skeletal keypoints and a BiLSTM with temporal attention",
+    s.addText("Real-time word-level recognition from video using MediaPipe skeletal keypoints, with a Transformer chosen from ten models",
       { x: MX, y: 4.85, w: 8.4, h: 0.8, margin: 0, fontFace: "Calibri", fontSize: 15, italic: true,
         color: "C8DEDB", isTextBox: true });
     const chips = ["Python", "MediaPipe", "PyTorch", "OpenCV", "scikit-learn"];
@@ -242,7 +242,7 @@ async function build() {
     header(s, "System architecture", "End-to-end pipeline");
     await flowRow(s, [["Video\n6.8 s @ 30 fps", null], ["Frame sampling\nevery 3rd frame", null],
       ["MediaPipe\npose + 2 hands", null], ["Normalisation\nbody-relative", null],
-      ["Resample\n64 frames", null], ["BiLSTM\n+ attention", null], ["Word\n+ speech", null]], 1.85, 1.15);
+      ["Resample\n64 frames", null], ["Transformer\n+ attention", null], ["Word\n+ speech", null]], 1.85, 1.15);
     s.addText("Stage outputs", { x: MX, y: 3.4, w: 6, h: 0.3, margin: 0, fontFace: "Calibri", fontSize: 14,
       bold: true, color: ACC_D, isTextBox: true });
     tableRows(s, ["Stage", "Output shape", "Purpose"], [
@@ -250,7 +250,7 @@ async function build() {
       ["MediaPipe landmarks", "33 pose + 2 × 21 hand points", "Discard pixels, keep geometry"],
       ["Feature engineering", "T × 239", "Signer-invariant posture + handshape"],
       ["Temporal resampling + deltas", "64 × 478", "Fixed size, tempo-invariant, motion explicit"],
-      ["BiLSTM + attention", `${S.classes ?? 61} logits`, "Word prediction with confidence"],
+      ["Transformer + attention pool", `${CMETA.classes ?? 315} logits`, "Word prediction with confidence"],
     ], MX, 3.75, W - 2 * MX, [2.6, 3.0, 6.5]);
     card(s, MX, 5.95, W - 2 * MX, 0.8, TINT);
     s.addText("Keypoint extraction is the only expensive stage — it runs once over the dataset (multi-process, ~7 minutes for 1,210 clips) and is cached to .npz, so every later experiment trains in minutes.",
@@ -309,7 +309,7 @@ async function build() {
   // -------------------------------------------------------- 8. the model
   {
     const s = slide();
-    header(s, "Model", "BiLSTM with temporal attention");
+    header(s, "First model", "BiLSTM with temporal attention");
     await flowRow(s, [["Input\n64 × 478", null], ["LayerNorm\n+ Linear 192", null], ["BiLSTM × 2\n192 hidden", null],
       ["Attention\npooling", null], [`Softmax\n${S.classes ?? 61} words`, null]], 1.8, 1.05, MX, 8.2);
     card(s, 9.2, 1.8, 3.5, 1.05, PANEL);
@@ -521,7 +521,7 @@ async function build() {
     const s = slide();
     header(s, "Deployment", "Real-time recognition on a laptop");
     await flowRow(s, [["Webcam\nframe", fa.FaVideo], ["MediaPipe\nlandmarks", fa.FaHandPaper],
-      ["Rolling 64-frame\nbuffer", fa.FaLayerGroup], ["BiLSTM\nevery 5 frames", fa.FaBrain],
+      ["Rolling 64-frame\nbuffer", fa.FaLayerGroup], ["Transformer\nevery 5 frames", fa.FaBrain],
       ["Confidence\ngate 0.6", fa.FaFilter], ["Text + speech", fa.FaVolumeUp]], 1.8, 1.15);
     body(s, [
       "The same normalisation code path runs live, so the training and inference distributions match exactly.",
@@ -588,7 +588,7 @@ async function build() {
     card(s, MX + colW + 0.4, 1.75, colW, 4.3);
     s.addText("Next steps", { x: MX + colW + 0.7, y: 1.95, w: colW - 0.6, h: 0.3, margin: 0, fontFace: "Calibri",
       fontSize: 15, bold: true, color: ACC_D, isTextBox: true });
-    body(s, [`Put the ${CMETA.classes ?? 315}-word Transformer into the live and browser demos`,
+    body(s, [`Test the deployed ${CMETA.classes ?? 315}-word Transformer on people in neither dataset`,
       "Add face landmarks for non-manual markers",
       "Continuous signing with CTC loss — no manual clip boundaries",
       "Sentence-level output with a small language model to fix word order",
@@ -608,10 +608,10 @@ async function build() {
       bold: true, color: ACCENT, charSpacing: 3, isTextBox: true });
     const seedMean = AB.full_training_seeds ? pct(AB.full_training_seeds.mean) : pct(S.test_top1);
     const seedSd = AB.full_training_seeds ? (AB.full_training_seeds.stdev * 100).toFixed(1) : "—";
-    s.addText(`A reproducible ISL recognition pipeline:\n${S.clips ?? 1210} clips → MediaPipe keypoints → ${S.classes ?? 61}-way BiLSTM`,
+    s.addText(`A reproducible ISL recognition pipeline:\n${(CMETA.clips ?? 5494).toLocaleString("en-IN")} clips → MediaPipe keypoints → ${CMETA.classes ?? 315}-way Transformer`,
       { x: MX, y: 1.85, w: 11.9, h: 1.35, margin: 0, fontFace: "Cambria", fontSize: 30, bold: true,
         color: "FFFFFF", lineSpacingMultiple: 1.1, isTextBox: true });
-    s.addText(`${seedMean} ± ${seedSd} on the standard split  ·  ${pct(shot(5).test_top1)} from five takes per word  ·  ${pct(shot(1).test_top1)} from a single example`,
+    s.addText(`${COMB.transformer ? pct(COMB.transformer.test.top1) : seedMean} top-1 on ${CMETA.classes ?? 315} words  ·  ${pct(shot(5).test_top1)} from five takes per word  ·  ${pct(shot(1).test_top1)} from a single example`,
       { x: MX, y: 3.35, w: 11.9, h: 0.45, margin: 0, fontFace: "Calibri", fontSize: 16,
         color: ACCENT, isTextBox: true });
     const items = [["Signer-invariant keypoint preprocessing", fa.FaRulerCombined],

@@ -6,33 +6,33 @@
 
 **Live demo: [run the model in your browser](https://pajiala99.github.io/#demo-isl)**, on held-out test clips or your
 webcam. MediaPipe's JavaScript tasks track the body and hands, `web/isl.js` computes the same features as
-`features.py`, and the BiLSTM runs as ONNX in onnxruntime-web. No video leaves the device. See
+`features.py`, and the 315-word Transformer runs as ONNX in onnxruntime-web. No video leaves the device. See
 [Browser version and parity](#browser-version-and-parity).
 
-<img src="docs/browser-demo-hello.jpg" width="530" alt="The live demo on the portfolio: a held-out clip of the sign for hello, tracked by MediaPipe, and the model's top five words with Hello at 92.0%, the same word and score Python gives for that file">
+<img src="docs/browser-demo-hello.jpg" width="600" alt="The live demo on the portfolio: a held-out clip of the sign for hello, tracked by MediaPipe, and the 315-word model's top five words with Hello at 96.6%, and Python at 96.7% on the same file">
 
-*The portfolio demo on a held-out clip: Hello at 92.0%, the same word and probability as the Python pipeline on the same file.*
+*The portfolio demo on a held-out clip: the 315-word Transformer gives Hello 96.6% in the browser and 96.7% in Python on the same file.*
 
 Word-level ISL recognition from video: MediaPipe skeletal keypoints → signer-invariant
-features → BiLSTM with temporal attention → word, text and speech. Runs live on a laptop
+features → Transformer encoder with attention pooling → word, text and speech. Runs live on a laptop
 webcam; no server, no video leaves the machine.
 
 ## Model card
 
 | | |
 |---|---|
-| **Predicts** | One of 61 Indian Sign Language words, from a short video of a single isolated sign |
-| **Model** | BiLSTM (2 layers, 192 units each way) with temporal attention, 1.67M parameters: `models/bilstm_orig.pt`, exported to `models/isl_bilstm.onnx` |
-| **Data** | The Kaggle dataset below (MIT): 1,210 original takes of 61 words, all by one signer, one session per word. Split by take, so a take's tilted copies never land on both sides |
-| **Input** | MediaPipe pose (9 upper-body points) and both hands on every third frame, normalised to the shoulders, resampled to 64 frames, plus velocities: 64 × 478 |
-| **Results** | 182 of 182 held-out takes (99.6% ± 0.5 over three training seeds), which proves little because a Random Forest also scores 100%. The harder protocols: 48.9% from one take per word, 95.6% from five, 25.8% with one hand hidden |
+| **Predicts** | One of 315 Indian Sign Language words, from a short video of a single isolated sign |
+| **Model** | Transformer encoder (3 layers, 4 heads) with attention pooling, 1.52M parameters: `models/isl_transformer.pt`, exported to `models/isl_transformer.onnx`. Chosen from ten models, see [Model comparison](#model-comparison-on-315-words-and-new-signers) |
+| **Data** | The Kaggle dataset below (MIT; 61 words, one signer) and INCLUDE (AI4Bharat; 264 words, several signers): 5,494 clips. Split by take, so a take's tilted copies never land on both sides; the split is `artifacts/split_combined.json` |
+| **Input** | MediaPipe pose (9 upper-body points) and both hands, x in frame-height units (the aspect fix), normalised to the shoulders, resampled to 64 frames, plus velocities: 64 × 478 |
+| **Results** | 95.8% top-1, 98.8% top-5 and 95.1 macro F1 on 801 held-out clips; 0.8 ms per clip on a CPU |
 
-**Limits:** trained on one signer. On people it has never seen (INCLUDE clips, see
-[Model comparison](#model-comparison-on-315-words-and-new-signers)) a BiLSTM trained this way gets 31% top-1, so a
-webcam user should expect mistakes; isolated words only; no facial or other non-manual markers; an aid, not an
-interpreter. `bilstm_orig.pt`, the model the live demo runs, was trained before the `_mirror` fix (`6cfba6e`) and the
-aspect fix; the seed and protocol numbers come from runs after the mirror fix. The 315-word Transformer chosen
-below is not in the live demo yet.
+**Limits:** each word was learned from one signer (Kaggle) or a few (INCLUDE). Its accuracy on people in neither
+dataset is not measured yet; the same Transformer trained on the Kaggle signer alone got 41% top-1 on INCLUDE signers,
+so a webcam user should expect mistakes. Isolated words only; no facial or other non-manual markers; an aid, not an
+interpreter. The original 61-word BiLSTM (`models/bilstm_orig.pt`, `models/isl_bilstm.onnx`) is kept, and every
+script takes it with `--ckpt`; the Kaggle-only protocols below (data efficiency, robustness, augmentation) were run
+with it.
 
 ## Model comparison on 315 words and new signers
 
@@ -183,7 +183,7 @@ The clips are from the source dataset, which is MIT-licensed and published publi
 ```
 video.mp4 → frame sampling (every 3rd) → MediaPipe pose + 2 hands
          → body-frame normalisation → 64-frame resample → +velocity
-         → 64 × 478 tensor → BiLSTM + attention → word
+         → 64 × 478 tensor → Transformer + attention pooling → word
 ```
 
 Per frame, 239 features: 9 upper-body pose points (x, y, visibility), both hands
@@ -242,7 +242,7 @@ python -m isl.plots
 python -m isl.demo --random 15 --play --speak
 
 # 6. live demo: text on screen + spoken output
-python -m isl.realtime --ckpt models/bilstm_orig.pt --speak
+python -m isl.realtime --speak                     # the 315-word Transformer; --ckpt models/bilstm_orig.pt for the 61-word BiLSTM
 ```
 
 ## Tests
@@ -264,33 +264,37 @@ extraction from video (needs the Kaggle dataset) and the live demo (needs a webc
 
 The [live demo](https://pajiala99.github.io/#demo-isl) runs this pipeline in the browser. `web/isl.js` uses MediaPipe
 Tasks JS 1.1.0, the same release as the Python `mediapipe` 1.1.0, with the same `.task` model files. It ports
-`features.py` line for line and runs the BiLSTM exported by `python -m isl.export_onnx` in onnxruntime-web. Three
-checks, from the inside out:
+`features.py` line for line, including the aspect fix (it takes the video's or webcam's own width / height), and runs
+the 315-word Transformer exported by `python -m isl.export_onnx` in onnxruntime-web. `models/isl_meta.json` names the
+model file and says whether it needs the aspect fix, so the page follows whichever model was exported. Three checks,
+from the inside out:
 
 | Check | Compared | Result |
 |---|---|---|
-| Export | PyTorch vs ONNX, on the features of the 182 held-out takes | Same top word on 182 of 182; largest probability difference 4.8 × 10⁻⁷ |
-| Features | `isl.js` vs `features.py`, on the cached keypoints of all 1,210 takes | Bit-identical: all 37,016,320 values |
-| End to end | The same 182 held-out clips through MediaPipe Python + numpy + PyTorch, and through MediaPipe JS + `isl.js` + onnxruntime-web in Chromium 152 | Same top word on 181 of 182 (the browser is right on all 182, Python on 181). Same frames sampled on all 182; median largest probability difference 0.0009; landmarks a median 0.005 of the frame apart |
+| Export | PyTorch vs ONNX, on the features of the 801 held-out clips | Same top word on 801 of 801; largest probability difference 6.6 × 10⁻⁷; 95.8% top-1 in both |
+| Features | `isl.js` vs `features.py` with the aspect fix, on the cached keypoints of all 1,210 Kaggle takes and every 4th INCLUDE clip (2,281 clips) | Bit-identical: all 69,780,352 values. Without the aspect fix (the 61-word BiLSTM's features), all 37,016,320 values of the 1,210 takes are bit-identical too |
+| End to end | The 178 held-out Kaggle clips through MediaPipe Python + numpy + PyTorch, and through MediaPipe JS + `isl.js` + onnxruntime-web in Chromium 156 | Same top word on 178 of 178, and both right on all 178. Same frames sampled on all 178; median largest probability difference 0.0015; landmarks a median 0.005 of the frame apart |
 
 Two details made the features bit-identical. numpy rounds every float32 operation, so `isl.js` rounds with
-`Math.fround` after each one. On Apple Silicon, numpy's `np.interp` computes `slope * dx + y` as one fused
-multiply-add, which `isl.js` emulates exactly. The dataset's videos are MPEG-4 Part 2, which browsers can't decode, so
-both sides read the same H.264 copies made with macOS `avconvert`.
+`Math.fround` after each one, including the aspect multiply (numpy multiplies by the aspect rounded to float32). On
+Apple Silicon, numpy's `np.interp` computes `slope * dx + y` as one fused multiply-add, which `isl.js` emulates exactly.
+The dataset's videos are MPEG-4 Part 2, which browsers can't decode, so both sides read the same H.264 copies made with
+macOS `avconvert`; Python gives the same word on the copy and on the original file for all 178 clips.
 
-The one disagreement is the least confident clip in the test set (`Radish/WIN_20231102_12_30_22_Pro`), a near-tie:
-Python says *cry* 36.5% over *radish* 31.8%, the browser *radish* 34.5% over *cry* 33.9%. Converting that clip to
-H.264 already flips Python's own answer (*radish* 41.6% on the original file); on the other 181 clips the copy and the
-original give Python the same word. The residual landmark differences come from the two MediaPipe builds and video
-decoders, not from the feature code, which check 2 shows is exact. Results are in
-`artifacts/onnx_export.json`, `artifacts/feature_parity.json` and `artifacts/parity.json`.
+The largest probability gap is on `Sparrow/WIN_20231103_13_41_59_Pro`: Python gives *sparrow* 94.2%, the browser
+*sparrow* 65.4%. The words agree; the gap comes from the two MediaPipe builds and video decoders finding slightly
+different landmarks, not from the feature code, which check 2 shows is exact. End-to-end clips are the Kaggle ones only,
+since their MIT licence lets the portfolio show them. Results are in `artifacts/onnx_export.json`,
+`artifacts/feature_parity.json` and `artifacts/parity.json`. The earlier 61-word BiLSTM passed the same checks (182 of
+182 exported, 181 of 182 end to end, the one difference a near-tie that re-encoding already flipped in Python).
 
 ```bash
-python -m isl.export_onnx                                   # 1. needs onnx + onnxruntime (best in their own env)
-python -m isl.parity features && node web/check_features.mjs     # 2.
+python -m isl.export_onnx                                        # 1. needs onnx + onnxruntime
+python -m isl.parity features --aspect && node web/check_features.mjs   # 2.
 python -m isl.parity clips      # 3. H.264 copies of the held-out clips, and Python's answer for each
 python -m isl.parity serve      #    then open http://127.0.0.1:8765/web/parity.html and let it finish
 python -m isl.parity compare
+python -m isl.parity site --out ../hunter-portfolio/assets/isl   # the portfolio's six demo clips
 ```
 
 ## Text and speech output
@@ -318,9 +322,8 @@ Trained on Apple Silicon GPU via PyTorch MPS; training itself takes 2.2 minutes.
 
 - Isolated words only — no continuous sentence recognition.
 - New signers are the weak point: a model trained on the Kaggle signer gets 41% at best on INCLUDE
-  signers. The combined 315-word models have seen several signers, and the next step is to test them
-  on people in neither dataset (`isl.record`, `isl.unseen_signer`).
-- The live and browser demos still run the 61-word BiLSTM; the 315-word Transformer is not deployed yet.
+  signers. The shipped 315-word Transformer has seen several signers, and the next step is to test it
+  on people in neither dataset (`isl.record`, then `isl.unseen_signer`).
 - No facial / non-manual markers yet.
 - An assistive aid, not a replacement for a human interpreter.
 

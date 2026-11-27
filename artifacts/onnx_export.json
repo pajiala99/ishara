@@ -1,8 +1,10 @@
 {
-  "model": "isl_bilstm.onnx",
-  "source_checkpoint": "bilstm_orig.pt",
-  "source_sha256": "238795b92da412abbbc71a7a24c90dba6e55ad3ba46ba3f12a14d61e5d386227",
-  "onnx_sha256": "2fb2090a60fdf00f2e0a2fe3e17ee71da5aef6468d4605d94d5b4c9938588d33",
+  "model": "isl_transformer.onnx",
+  "arch": "transformer",
+  "source_checkpoint": "isl_transformer.pt",
+  "aspect_correct": true,
+  "source_sha256": "044fa221610982a7eb8b59c130151b3daa02664fa938b661cb835a587293269e",
+  "onnx_sha256": "859f767fbc35d050237b1122c5959c29f22f8c5c21ca0ed86444c91a8077a452",
   "opset": 17,
   "input": [
     "batch",
@@ -24,10 +26,10 @@
   ],
   "n_hand": 21,
   "export_check": {
-    "test_clips": 182,
-    "top1_agree": 182,
-    "max_abs_prob_diff": 4.76837158203125e-07,
-    "onnx_test_top1": 1.0,
-    "torch_test_top1": 1.0
+    "test_clips": 801,
+    "top1_agree": 801,
+    "max_abs_prob_diff": 6.556510925292969e-07,
+    "onnx_test_top1": 0.9575530586766542,
+    "torch_test_top1": 0.9575530586766542
   }
 }
