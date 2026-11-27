@@ -1,8 +1,13 @@
 mediapipe>=1.1.0
 opencv-python>=4.10
-torch>=2.2
 numpy>=1.26
+torch>=2.2
+torchvision>=0.17
 scikit-learn>=1.4
 matplotlib>=3.8
-seaborn>=0.13
-tqdm>=4.66
+pandas>=2.0
+onnx>=1.16
+onnxruntime>=1.18
+streamlit>=1.35
+plotly>=5.20
+pytest>=8.0
