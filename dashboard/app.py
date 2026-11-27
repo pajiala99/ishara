@@ -92,7 +92,7 @@ with tabs[0]:
     comb, cmeta = comparison("combined")
     best = max(((new_signer(n).get("top1") or 0, n) for n in k61), default=(0, ""))
     c = st.columns(5)
-    c[0].metric("Words", f"{cmeta.get('classes', 61)}", "Kaggle 61 + INCLUDE 264", delta_color="off")
+    c[0].metric("Words", f"{cmeta.get('classes', 61)}", "Kaggle 61 + INCLUDE 263, 9 shared", delta_color="off")
     c[1].metric("Clips", f"{cmeta.get('clips', 1210):,}", "+1,640 tilted copies for training", delta_color="off")
     c[2].metric("Models compared", f"{len(k61)}", "classical, RNN, CNN, Transformer, pretrained", delta_color="off")
     c[3].metric("Chosen model", "Transformer",
@@ -241,7 +241,7 @@ with tabs[4]:
     st.dataframe(pd.DataFrame([
         {"Dataset": "Kaggle ISL video dataset", "Signers": "1", "Words": 61, "Videos": "3,630 (1,210 + tilts)",
          "Frame size": "640×720, 760×720, 880×720", "fps": "30", "Clip length": "≈ 6.8 s"},
-        {"Dataset": "INCLUDE (AI4Bharat)", "Signers": "several", "Words": 264, "Videos": "4,284",
+        {"Dataset": "INCLUDE (AI4Bharat)", "Signers": "several", "Words": 263, "Videos": "4,284",
          "Frame size": "1920×1080", "fps": "25", "Clip length": "≈ 2.5 s"},
         {"Dataset": "Combined", "Signers": "several", "Words": 315, "Videos": "5,494 + 1,640 training-only tilts",
          "Frame size": "mixed (aspect fix)", "fps": "mixed", "Clip length": "resampled to 64 frames"},

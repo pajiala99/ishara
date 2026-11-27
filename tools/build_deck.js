@@ -464,7 +464,7 @@ async function build() {
     s.addText("How we chose", { x: 9.1, y: 1.8, w: 3.4, h: 0.3, margin: 0, fontFace: "Calibri", fontSize: 15,
       bold: true, color: ACC_D, isTextBox: true });
     body(s, [
-      `Data: Kaggle (61 words, one signer) + INCLUDE (264 words, several signers) = ${(CMETA.clips || 0).toLocaleString("en-IN")} clips.`,
+      `Data: Kaggle (61 words, one signer) + INCLUDE (263 words, several signers) = ${(CMETA.clips || 0).toLocaleString("en-IN")} clips.`,
       "Same split, optimiser, schedule and augmentation for every network.",
       `Rule: best macro F1; within 1 point is a tie, broken by accuracy on new signers.`,
       `${NAMES[best]} and ${NAMES[second]} tie at ${num(COMB[best].test.top1)}% top-1; on new signers it is ${num(newSigner(best).top1)}% against ${num(newSigner(second).top1)}%.`,

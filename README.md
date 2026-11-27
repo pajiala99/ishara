@@ -23,7 +23,7 @@ webcam; no server, no video leaves the machine.
 |---|---|
 | **Predicts** | One of 315 Indian Sign Language words, from a short video of a single isolated sign |
 | **Model** | Transformer encoder (3 layers, 4 heads) with attention pooling, 1.52M parameters: `models/isl_transformer.pt`, exported to `models/isl_transformer.onnx`. Chosen from ten models, see [Model comparison](#model-comparison-on-315-words-and-new-signers) |
-| **Data** | The Kaggle dataset below (MIT; 61 words, one signer) and INCLUDE (AI4Bharat; 264 words, several signers): 5,494 clips. Split by take, so a take's tilted copies never land on both sides; the split is `artifacts/split_combined.json` |
+| **Data** | The Kaggle dataset below (MIT; 61 words, one signer) and INCLUDE (AI4Bharat; 263 words, several signers): 5,494 clips. Split by take, so a take's tilted copies never land on both sides; the split is `artifacts/split_combined.json` |
 | **Input** | MediaPipe pose (9 upper-body points) and both hands, x in frame-height units (the aspect fix), normalised to the shoulders, resampled to 64 frames, plus velocities: 64 × 478 |
 | **Results** | 95.8% top-1, 98.8% top-5 and 95.1 macro F1 on 801 held-out clips; 0.8 ms per clip on a CPU |
 
@@ -37,7 +37,7 @@ with it.
 ## Model comparison on 315 words and new signers
 
 Ten models, one split, one set of metrics, so the choice rests on evidence. The Kaggle data was joined with
-[INCLUDE](https://zenodo.org/records/4010759) (AI4Bharat: 264 words, 4,284 videos, several signers): **315 words,
+[INCLUDE](https://zenodo.org/records/4010759) (AI4Bharat: 263 words, 4,284 videos, several signers; 9 words are in both): **315 words,
 5,494 clips**, split by take as before (5,532 training clips including 1,640 tilted copies, 801 validation, 801 test).
 Every network gets the same optimiser, schedule, early stopping and augmentation (`src/isl/compare.py`); the two
 pretrained models are frozen backbones on video frames with a trained head (`src/isl/pixel.py`).

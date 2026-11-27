@@ -154,7 +154,7 @@ def main():
     datasets = f"""<table><thead><tr><th>Dataset</th><th>Words</th><th>Clips</th><th>Signers</th><th>Used for</th></tr></thead><tbody>
 <tr><td>Kaggle ISL video dataset</td><td>61</td><td>1,210 originals</td><td>1</td><td>train / validation / test</td></tr>
 <tr><td>Kaggle tilted copies</td><td>61</td><td>1,640 used of 2,531</td><td>1</td><td>training only, and only when the original take is a training take</td></tr>
-<tr><td>INCLUDE (AI4Bharat)</td><td>264</td><td>4,284</td><td>several</td><td>new-signer test (9 shared words) and the combined set</td></tr>
+<tr><td>INCLUDE (AI4Bharat)</td><td>263</td><td>4,284</td><td>several</td><td>new-signer test (9 shared words) and the combined set</td></tr>
 <tr><td>Combined</td><td>{cmeta.get('classes', 316)}</td><td>{cmeta.get('clips') or 'pending'}</td><td>several</td><td>the final comparison</td></tr>
 </tbody></table>"""
 
@@ -204,7 +204,7 @@ ul{{margin:8px 0 0;padding-left:20px}}
 <div class="figs">{img("data_efficiency.png")}{img("robustness.png")}{img("augmentation.png")}</div></section>
 
 <section><h2>Bugs found and fixed along the way</h2><ul>
-<li><b>Frame shape.</b> Features depended on the video's width-to-height ratio; fixed with the aspect correction (opt-in until the final model is retrained).</li>
+<li><b>Frame shape.</b> Features depended on the video's width-to-height ratio; fixed with the aspect correction, which the deployed 315-word Transformer uses.</li>
 <li><b>Mirror augmentation.</b> Swapped the hands but not the arms; fixed and every experiment rerun.</li>
 <li><b>Live app.</b> Fed the model a mirrored frame; now only the window is mirrored.</li></ul></section>
 </main>
