@@ -23,6 +23,28 @@ const abs = (k) => ((AB.settings || {})[k] || {}).mean;
 const shot = (k) => (E.data_efficiency || []).find((r) => r.takes_per_class === k) || {};
 const rob = (k) => (E.robustness || {})[k];
 const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
+const num = (x) => (x == null ? "—" : (x * 100).toFixed(1));
+
+// model comparison: combined 315-word run, new-signer runs (Kaggle-61 model, held-out half of the INCLUDE clips)
+const strip = (d) => Object.fromEntries(Object.entries(d || {}).filter(([k]) => !k.startsWith("_")));
+const COMB_RAW = readJSON("comparison_combined.json", null);
+const COMB = strip(COMB_RAW), CMETA = (COMB_RAW || {})._meta || {};
+const K61 = strip(readJSON("comparison_kaggle61.json", {}));
+const NS = strip(readJSON("comparison_ns_aspect.json", {})), NS0 = strip(readJSON("comparison_ns_base.json", {}));
+const NAMES = { svm: "SVM", random_forest: "Random Forest", lstm: "LSTM", bilstm: "BiLSTM + attention", gru: "GRU",
+  bigru: "BiGRU", tcn: "1-D CNN (TCN)", transformer: "Transformer", resnet18_bilstm: "ResNet-18 + BiLSTM",
+  r3d18: "R3D-18 3-D CNN" };
+const KIND = { svm: "classical", random_forest: "classical", resnet18_bilstm: "pretrained CNN", r3d18: "pretrained CNN" };
+const newSigner = (m) => (NS[m] || {}).new_signer_test || (K61[m] || {}).new_signer || {};
+// rank: combined macro F1, within 1 point of the best is a tie, ties go to new-signer top-1 (as isl.compare_report)
+const RANKED = (() => {
+  const ms = Object.keys(COMB);
+  if (!ms.length) return [];
+  const top = Math.max(...ms.map((m) => COMB[m].test.f1));
+  const tied = (m) => COMB[m].test.f1 >= top - 0.01;
+  return ms.sort((a, b) => (tied(b) - tied(a)) || (tied(a)
+    ? (newSigner(b).top1 || 0) - (newSigner(a).top1 || 0) : COMB[b].test.f1 - COMB[a].test.f1));
+})();
 
 // ---------------------------------------------------------------- palette
 const PANEL = "0F3B3C", ACCENT = "2DD4BF", ACC_D = "0F766E", TINT = "E6F6F3";
@@ -427,6 +449,54 @@ async function build() {
     s.addNotes("State this number plainly, whatever it is. It is the most honest slide in the deck.");
   }
 
+  // ------------------------------------------- 13c. model comparison
+  if (RANKED.length) {
+    const s = slide();
+    const [best, second] = RANKED;
+    header(s, "Model comparison", `Ten models on ${CMETA.classes ?? 315} words: the ${NAMES[best]} is chosen`);
+    tableRows(s, ["#", "Model", "Type", "Top-1", "Macro F1", "New signers", "ms / clip"],
+      RANKED.map((m, i) => [i + 1, NAMES[m], KIND[m] || "keypoints", num(COMB[m].test.top1), num(COMB[m].test.f1),
+        num(newSigner(m).top1) + (NS[m] ? "" : " *"), (COMB[m].latency_ms || 0).toFixed(1)]),
+      MX, 1.6, 7.9, [0.4, 2.2, 1.65, 0.8, 0.95, 1.1, 0.8]);
+    s.addText(`Combined test: ${CMETA.test ?? 801} clips. New signers: trained on the Kaggle signer, tested on INCLUDE signers (83 clips, chance 1.6%). * pixel models: all 167 clips.`,
+      { x: MX, y: 5.45, w: 7.9, h: 0.5, margin: 0, fontFace: "Calibri", fontSize: 11, italic: true, color: MUTED, isTextBox: true });
+    card(s, 8.85, 1.6, 3.85, 4.35);
+    s.addText("How we chose", { x: 9.1, y: 1.8, w: 3.4, h: 0.3, margin: 0, fontFace: "Calibri", fontSize: 15,
+      bold: true, color: ACC_D, isTextBox: true });
+    body(s, [
+      `Data: Kaggle (61 words, one signer) + INCLUDE (264 words, several signers) = ${(CMETA.clips || 0).toLocaleString("en-IN")} clips.`,
+      "Same split, optimiser, schedule and augmentation for every network.",
+      `Rule: best macro F1; within 1 point is a tie, broken by accuracy on new signers.`,
+      `${NAMES[best]} and ${NAMES[second]} tie at ${num(COMB[best].test.top1)}% top-1; on new signers it is ${num(newSigner(best).top1)}% against ${num(newSigner(second).top1)}%.`,
+    ], 9.1, 2.2, 3.45, 12);
+    card(s, MX, 6.1, W - 2 * MX, 0.8, PANEL);
+    s.addText("Pretrained ImageNet and Kinetics CNNs score well on the test set but fall to chance on new signers, and are about 300 times slower: they learn the person and the room, keypoints learn the movement.",
+      { x: MX + 0.35, y: 6.1, w: W - 2 * MX - 0.7, h: 0.8, margin: 0, fontFace: "Calibri", fontSize: 13,
+        color: "D7E9E7", valign: "middle", isTextBox: true });
+    s.addNotes("The one-signer test cannot pick a model (all ten score 97-100%). The combined test narrows it to two, and new signers decide.");
+  }
+
+  // ---------------------------------- 13d. new signers and the aspect bug
+  if (Object.keys(NS).length) {
+    const s = slide();
+    header(s, "New signers", "The hardest test found a bug, and fixing it lifted every model");
+    const ms = ["lstm", "gru", "bilstm"].filter((m) => NS0[m] && NS[m]);
+    tableRows(s, ["Model", "Before the fix", "After the fix"],
+      ms.map((m) => [NAMES[m], num(NS0[m].new_signer_test.top1) + "%", num(NS[m].new_signer_test.top1) + "%"]),
+      MX, 1.7, 5.6, [2.4, 1.6, 1.6]);
+    stat(s, MX, 3.35, 2.7, num(newSigner("transformer").top1) + "%", "Transformer, new signers, top-1");
+    stat(s, MX + 2.9, 3.35, 2.7, "1.6%", "chance (61 words)", MUTED);
+    s.addText("New-signer top-1 on the held-out half of the INCLUDE clips; the other half chose the setting.",
+      { x: MX, y: 4.75, w: 5.6, h: 0.5, margin: 0, fontFace: "Calibri", fontSize: 11, italic: true, color: MUTED, isTextBox: true });
+    body(s, [
+      "MediaPipe gives x as a fraction of frame width and y as a fraction of frame height.",
+      "Kaggle videos are 640-880 x 720, INCLUDE 1920 x 1080: the same body came out squashed sideways in one dataset.",
+      "Fix: put x in frame-height units, using each clip's stored frame size.",
+      "Also tried: trimming idle frames and mirroring. Neither helped on the dev half, so both are off.",
+    ], 6.9, 1.7, 5.8, 13);
+    s.addNotes("This is the slide that shows the method: a test on people the model never saw exposed a measurement bug that the one-signer test could never reveal.");
+  }
+
   // ------------------------------------------------ 14. error analysis
   {
     const s = slide();
@@ -513,12 +583,12 @@ async function build() {
     body(s, ["Isolated words only — no continuous sentences",
       `Vocabulary limited to the ${S.classes ?? 61} classes in the dataset`,
       "No facial / non-manual markers yet, which disambiguate some sign pairs",
-      "Signer-mixed split: performance on a completely new signer will be lower",
+      `New signers are the weak point: ${num(newSigner("transformer").top1)}% top-1 at best when trained on one signer`,
       "Degrades in very low light or heavy occlusion, where MediaPipe itself fails"], MX + 0.3, 2.4, colW - 0.6, 12.5);
     card(s, MX + colW + 0.4, 1.75, colW, 4.3);
     s.addText("Next steps", { x: MX + colW + 0.7, y: 1.95, w: colW - 0.6, h: 0.3, margin: 0, fontFace: "Calibri",
       fontSize: 15, bold: true, color: ACC_D, isTextBox: true });
-    body(s, ["Signer-independent evaluation as the headline metric",
+    body(s, [`Put the ${CMETA.classes ?? 315}-word Transformer into the live and browser demos`,
       "Add face landmarks for non-manual markers",
       "Continuous signing with CTC loss — no manual clip boundaries",
       "Sentence-level output with a small language model to fix word order",
@@ -545,7 +615,7 @@ async function build() {
       { x: MX, y: 3.35, w: 11.9, h: 0.45, margin: 0, fontFace: "Calibri", fontSize: 16,
         color: ACCENT, isTextBox: true });
     const items = [["Signer-invariant keypoint preprocessing", fa.FaRulerCombined],
-      ["Leakage-safe, group-aware data splits", fa.FaShieldAlt],
+      [`Ten models compared on ${CMETA.classes ?? 315} words; Transformer chosen`, fa.FaShieldAlt],
       ["Diagnosed a saturated benchmark, then built harder protocols", fa.FaBalanceScale],
       ["Live webcam demo with speech output", fa.FaVolumeUp]];
     for (let i = 0; i < items.length; i++) {

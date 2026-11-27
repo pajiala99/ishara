@@ -27,10 +27,63 @@ webcam; no server, no video leaves the machine.
 | **Input** | MediaPipe pose (9 upper-body points) and both hands on every third frame, normalised to the shoulders, resampled to 64 frames, plus velocities: 64 × 478 |
 | **Results** | 182 of 182 held-out takes (99.6% ± 0.5 over three training seeds), which proves little because a Random Forest also scores 100%. The harder protocols: 48.9% from one take per word, 95.6% from five, 25.8% with one hand hidden |
 
-**Limits:** one signer, so nothing here measures accuracy on a new signer, and a webcam user should expect
-mistakes; isolated words only; no facial or other non-manual markers; an aid, not an interpreter.
-`bilstm_orig.pt`, the model the live demo runs, was trained before the `_mirror` fix (`6cfba6e`); the seed and
-protocol numbers come from runs after it.
+**Limits:** trained on one signer. On people it has never seen (INCLUDE clips, see
+[Model comparison](#model-comparison-on-315-words-and-new-signers)) a BiLSTM trained this way gets 31% top-1, so a
+webcam user should expect mistakes; isolated words only; no facial or other non-manual markers; an aid, not an
+interpreter. `bilstm_orig.pt`, the model the live demo runs, was trained before the `_mirror` fix (`6cfba6e`) and the
+aspect fix; the seed and protocol numbers come from runs after the mirror fix. The 315-word Transformer chosen
+below is not in the live demo yet.
+
+## Model comparison on 315 words and new signers
+
+Ten models, one split, one set of metrics, so the choice rests on evidence. The Kaggle data was joined with
+[INCLUDE](https://zenodo.org/records/4010759) (AI4Bharat: 264 words, 4,284 videos, several signers): **315 words,
+5,494 clips**, split by take as before (5,532 training clips including 1,640 tilted copies, 801 validation, 801 test).
+Every network gets the same optimiser, schedule, early stopping and augmentation (`src/isl/compare.py`); the two
+pretrained models are frozen backbones on video frames with a trained head (`src/isl/pixel.py`).
+
+| Rank | Model | Type | Top-1 | Top-5 | Precision | Recall | Macro F1 | New signers top-1 / top-5 | Params | ms per clip |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | **Transformer** | keypoints | **95.8** | 98.8 | 95.7 | 95.5 | 95.1 | **41.0** / 71.1 | 1.52 M | 0.8 |
+| 2 | 1-D CNN (TCN) | keypoints | 95.8 | 98.8 | 96.6 | 95.7 | 95.4 | 28.9 / 57.8 | 0.91 M | 0.7 |
+| 3 | GRU | keypoints | 94.4 | 98.4 | 94.9 | 94.6 | 93.9 | 32.5 / 61.4 | 0.62 M | 1.4 |
+| 4 | BiLSTM + attention | keypoints | 94.8 | 98.3 | 94.7 | 94.4 | 93.8 | 31.3 / 50.6 | 1.77 M | 3.0 |
+| 5 | BiGRU | keypoints | 94.3 | 98.1 | 94.1 | 94.0 | 93.3 | 32.5 / 59.0 | 1.40 M | 2.9 |
+| 6 | ResNet-18 (ImageNet) + BiLSTM | pretrained, pixels | 90.4 | 96.8 | 91.4 | 91.0 | 90.0 | 2.4 / 10.8 * | 0.77 M | 236 |
+| 7 | LSTM | keypoints | 90.3 | 97.9 | 89.4 | 89.2 | 88.1 | 30.1 / 47.0 | 0.77 M | 1.6 |
+| 8 | Random Forest | classical | 85.4 | 96.1 | 85.2 | 85.3 | 83.5 | 25.3 / 65.1 | | 13.2 |
+| 9 | R3D-18 (Kinetics-400) 3-D CNN | pretrained, pixels | 80.0 | 93.9 | 82.7 | 81.2 | 79.9 | 0.6 / 11.4 * | 0.16 M | 219 |
+| 10 | SVM | classical | 66.9 | 82.0 | 69.7 | 66.5 | 65.5 | 14.5 / 49.4 | | 3.7 |
+
+Top-1 to F1: the combined test set (801 clips; macro scores weight every word equally). **New signers:** the same
+model trained on the Kaggle signer alone, scored on INCLUDE clips of the 9 words both datasets share, signed by
+other people (61-way choice, chance 1.6%). Those 167 clips are split in half: one half chose the feature settings,
+the other half (83 clips) is reported here. \* The pixel models use no keypoints: their figure is from all 167
+clips. Latency: one clip on a CPU for keypoint models; pixel models include their backbone on the Mac GPU. Trainable
+parameters for the pixel models. Full table: [`artifacts/model_comparison.md`](artifacts/model_comparison.md).
+
+<img src="artifacts/model_comparison_all.png" width="760" alt="Bar chart of the ten models: one-signer test, new signers and combined macro F1, ranked">
+
+**Choice: the Transformer.** The rule is macro F1 on the combined test, with models within one point of the best
+counted as tied (one point is about 8 test clips), and ties going to new-signer accuracy. The Transformer and the
+1-D CNN tie on the combined test (95.8% top-1 each, F1 95.1 and 95.4), and on signers neither has seen the
+Transformer is clearly ahead (41.0% against 28.9%). It is also 0.8 ms per clip, fast enough for live use.
+
+What the comparison showed:
+
+- **The one-signer test cannot choose a model:** all ten score 96.7–100% on it.
+- **Pretrained pixel models transfer worst.** ImageNet and Kinetics features are 90.4% and 80.0% on the combined
+  test but at chance on new signers: they learn the look of one person and room, not the movement. Keypoints carry
+  the sign and drop the background, and are about 300 times faster.
+- **A bug found by the new-signer test.** MediaPipe gives x in frame widths and y in frame heights. Kaggle videos
+  are 640–880 × 720 and INCLUDE 1920 × 1080, so INCLUDE bodies came out squashed sideways. Putting x in
+  frame-height units (`features.py`, `aspect`) lifted new-signer top-1 for every model that was measured both
+  ways (BiLSTM 15.7 → 31.3, LSTM 24.1 → 30.1, GRU 24.1 → 32.5 on the reported half). Trimming idle frames and
+  mirroring did not help on the dev half and are off.
+
+Rebuild: `python tools/download_include.py`, `python -m isl.extract` on `data/include/videos`, then
+`tools/final_pipeline.sh` runs the comparison, the pixel models, the table and the dashboard. Results are in
+[`dashboard/index.html`](dashboard/index.html) (offline, one file) and `streamlit run dashboard/app.py` (live).
 
 ## Results
 
@@ -146,9 +199,13 @@ src/isl/
   extract.py         stage 1: videos → cached .npz landmarks (multi-process)
   features.py        normalisation, resampling, deltas, pooled stats
   dataset.py         group-aware stratified split, torch Dataset, augmentation
-  models.py          BiLSTM+attention, Transformer encoder
+  models.py          BiLSTM+attention, LSTM / GRU / BiGRU, 1-D CNN (TCN), Transformer encoder
   train.py           stage 2: training loop (MPS/CUDA/CPU)
   baselines.py       SVM / Random Forest on pooled features
+  compare.py         every model on one split: test metrics, latency, new-signer scores
+  pixel.py           pretrained ResNet-18 and R3D-18 on video frames, frozen, with a trained head
+  compare_report.py  ranks the models and writes the comparison table and chart
+  dashboard.py       the offline results page, dashboard/index.html
   evaluate.py        stage 3: metrics, confusion matrix, curves
   experiments.py     data efficiency, robustness, augmentation protocols
   ablation.py        which augmentations help; seed variance
@@ -260,8 +317,10 @@ Trained on Apple Silicon GPU via PyTorch MPS; training itself takes 2.2 minutes.
 ## Known limitations
 
 - Isolated words only — no continuous sentence recognition.
-- Single-signer dataset, so signer-independent evaluation is impossible here; cross-dataset
-  testing on INCLUDE (263 signs, multiple signers) is the next step.
+- New signers are the weak point: a model trained on the Kaggle signer gets 41% at best on INCLUDE
+  signers. The combined 315-word models have seen several signers, and the next step is to test them
+  on people in neither dataset (`isl.record`, `isl.unseen_signer`).
+- The live and browser demos still run the 61-word BiLSTM; the 315-word Transformer is not deployed yet.
 - No facial / non-manual markers yet.
 - An assistive aid, not a replacement for a human interpreter.
 

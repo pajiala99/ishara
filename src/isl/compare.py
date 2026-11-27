@@ -180,7 +180,7 @@ def main():
                                     "val": len(val_s), "test": len(test_s), "cross_clips": len(cross_s),
                                     "cross_words": sorted({s.label for s in cross_s}),
                                     "settings": {"aspect": a.aspect, "trim": a.trim, "mirror": a.mirror,
-                                                 "train_extra": [str(p) for p in a.train_extra]}})
+                                                 "train_extra": [str(p.relative_to(ROOT)) for p in a.train_extra]}})
     Xs = {}
     for name in a.models:
         t0 = time.time()

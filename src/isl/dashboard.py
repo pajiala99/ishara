@@ -85,16 +85,45 @@ def main():
     meta, cmeta = k61.get("_meta", {}), comb.get("_meta", {})
     models = [m for m in NAMES if m in k61 or m in comb]
 
-    best = max((m for m in models if get(k61, m, "new_signer", "top1") is not None),
-               key=lambda m: k61[m]["new_signer"]["top1"], default=None)
+    ns_run = load("comparison_ns_aspect.json")
+
+    def new(m):
+        """New-signer metrics: aspect-fixed Kaggle-61 model on the held-out half of the INCLUDE clips;
+        the pixel models use no keypoints, so theirs is the Kaggle-61 run on all 167 clips."""
+        return get(ns_run, m, "new_signer_test") or get(k61, m, "new_signer")
+
+    best = max((m for m in models if get(new(m), "top1") is not None),
+               key=lambda m: new(m)["top1"], default=None)
     words = cmeta.get("classes") or meta.get("classes", 61)
     tiles = [("Words", f"{words}", "Kaggle 61 + INCLUDE" if cmeta else "Kaggle dataset; combined run pending"),
              ("Clips", f"{cmeta.get('clips', meta.get('clips', 0)):,}", "videos turned into keypoints"),
              ("Models compared", f"{len(models)}", "classical, sequence, CNN, pretrained"),
-             ("Best on new signers", (pct(get(k61, best, "new_signer", "top1")) + "%") if best else "&ndash;",
+             ("Best on new signers", (pct(get(new(best), "top1")) + "%") if best else "&ndash;",
               f"{NAMES.get(best, '')}, top-1; chance is 1.6%")]
 
-    same_vs_new = hbars([(NAMES[m], [get(k61, m, "test", "top1"), get(k61, m, "new_signer", "top1")])
+    # the choice, by the rule in compare_report: combined macro F1, within 1 point counts as a tie, ties go to
+    # new-signer top-1
+    f1 = {m: get(comb, m, "test", "f1") for m in models if get(comb, m, "test", "f1") is not None}
+    chosen = runner = None
+    if f1:
+        tied = [m for m in f1 if f1[m] >= max(f1.values()) - 0.01]
+        ranked = sorted(tied, key=lambda m: -(get(new(m), "top1") or 0))
+        chosen, runner = ranked[0], (ranked[1] if len(ranked) > 1 else None)
+    choice = ""
+    if chosen:
+        c, r = comb[chosen]["test"], (comb[runner]["test"] if runner else None)
+        choice = (f"<section><h2>Chosen model: {NAMES[chosen]}</h2><p>On the combined test set ({cmeta.get('test')} clips, "
+                  f"{cmeta.get('classes')} words) it scores <b>{pct(c['top1'])}%</b> top-1, {pct(c['top5'])}% top-5 and "
+                  f"{pct(c['f1'])} macro F1, in {comb[chosen].get('latency_ms', 0):.1f} ms per clip on a CPU. "
+                  + (f"{NAMES[runner]} is level on that test ({pct(r['top1'])}% top-1, {pct(r['f1'])} F1), so the tie goes to "
+                     f"signers neither model has seen: <b>{pct(get(new(chosen), 'top1'))}%</b> against "
+                     f"{pct(get(new(runner), 'top1'))}% (chance 1.6%)." if runner else "")
+                  + "</p><p class='muted'>Rule: rank by combined macro F1; models within 1 point of the best count as "
+                  "tied (1 point is about 8 test clips) and are ranked by new-signer top-1.</p></section>")
+    kp = [get(new(m), "top1") for m in models if m in k61 and "pixels" not in KIND.get(m, "")
+          and get(new(m), "top1") is not None]
+
+    same_vs_new = hbars([(NAMES[m], [get(k61, m, "test", "top1"), get(new(m), "top1")])
                          for m in models if m in k61],
                         [("Same signer (Kaggle test)", "--s1"), ("New signers (INCLUDE)", "--s2")])
 
@@ -103,7 +132,7 @@ def main():
         a, c = k61.get(m, {}), comb.get(m, {})
         cells = [NAMES[m], KIND.get(m, "Keypoints, sequence")]
         cells += [pct(get(a, "test", k)) for k in ("top1", "top5", "precision", "recall", "f1")]
-        cells += [pct(get(a, "new_signer", k)) for k in ("top1", "top5")]
+        cells += [pct(get(new(m), k)) for k in ("top1", "top5")]
         if comb:
             cells += [pct(get(c, "test", k)) for k in ("top1", "f1")]
         params = (c or a).get("params")
@@ -124,7 +153,7 @@ def main():
     exp = load("experiments.json")
     datasets = f"""<table><thead><tr><th>Dataset</th><th>Words</th><th>Clips</th><th>Signers</th><th>Used for</th></tr></thead><tbody>
 <tr><td>Kaggle ISL video dataset</td><td>61</td><td>1,210 originals</td><td>1</td><td>train / validation / test</td></tr>
-<tr><td>Kaggle tilted copies</td><td>61</td><td>1,630 used of 2,531</td><td>1</td><td>training only, and only when the original take is a training take</td></tr>
+<tr><td>Kaggle tilted copies</td><td>61</td><td>1,640 used of 2,531</td><td>1</td><td>training only, and only when the original take is a training take</td></tr>
 <tr><td>INCLUDE (AI4Bharat)</td><td>264</td><td>4,284</td><td>several</td><td>new-signer test (9 shared words) and the combined set</td></tr>
 <tr><td>Combined</td><td>{cmeta.get('classes', 316)}</td><td>{cmeta.get('clips') or 'pending'}</td><td>several</td><td>the final comparison</td></tr>
 </tbody></table>"""
@@ -156,11 +185,12 @@ ul{{margin:8px 0 0;padding-left:20px}}
 <h1>Ishara: Indian Sign Language recognition</h1>
 <p class="sub">Team: Hardik Pajiala, Khushi Dangi, Geetika Parakh &middot; results dashboard, built {dt.date.today():%d %b %Y} from <code>artifacts/</code></p>
 <div class="tiles">{"".join(f'<div class="tile"><span>{t}</span><b>{v}</b><span>{n}</span></div>' for t, v, n in tiles)}</div>
+{choice}
 
 <section><h2>Same signer vs new signers</h2>
 <p class="muted">Every model is trained on the Kaggle dataset (one signer), then scored on its own test clips and on {meta.get('cross_clips', 167)} INCLUDE clips of the {len(meta.get('cross_words', [])) or 9} shared words, signed by other people. Choice of 61 words; guessing scores 1.6%.</p>
 {same_vs_new}
-<p class="callout">On the same signer every model scores 97&ndash;100%, so that test cannot choose a model. On new signers they fall to 0&ndash;25%: keypoint models hold up far better than the pretrained pixel CNNs, which learned one person's look rather than the sign.</p></section>
+<p class="callout">On the same signer every model scores 97&ndash;100%, so that test cannot choose a model. On new signers, with the aspect fix, keypoint models reach {pct(min(kp), 0) if kp else "&ndash;"}&ndash;{pct(max(kp), 0) if kp else "&ndash;"}% (chance 1.6%), while the pretrained pixel CNNs fall to chance: they learned one person's look rather than the sign. New signers: the Kaggle model with the aspect fix on the held-out half of the INCLUDE clips of the 9 shared words; pixel models on all 167.</p></section>
 
 <section><h2>Every model, every metric</h2><p class="muted">Click a column to sort. Kaggle test: {meta.get('test', 182)} clips. Macro scores weight every word equally. Latency: keypoint models on CPU for one clip; pixel models include their frozen backbone on the Mac GPU.</p>
 <div class="scroll">{table}</div></section>
