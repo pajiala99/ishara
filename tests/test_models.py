@@ -20,6 +20,8 @@ def test_encoders_give_class_logits_and_attention_over_time(name):
     torch.testing.assert_close(attn.sum(1), torch.ones(3))
 
 
+@pytest.mark.skipif(not (MODELS / "bilstm_orig.pt").exists(),
+                    reason="models/bilstm_orig.pt not in this copy (left out of size-limited submissions)")
 def test_committed_checkpoint_still_fits_the_code_and_the_class_list():
     """models/bilstm_orig.pt, the original 61-word model, still loads (any script with --ckpt)."""
     state = torch.load(MODELS / "bilstm_orig.pt", map_location="cpu", weights_only=True)
