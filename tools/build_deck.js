@@ -588,7 +588,7 @@ async function build() {
     card(s, MX + colW + 0.4, 1.75, colW, 4.3);
     s.addText("Next steps", { x: MX + colW + 0.7, y: 1.95, w: colW - 0.6, h: 0.3, margin: 0, fontFace: "Calibri",
       fontSize: 15, bold: true, color: ACC_D, isTextBox: true });
-    body(s, [`Test the deployed ${CMETA.classes ?? 315}-word Transformer on people in neither dataset`,
+    body(s, [`Train on more signers to raise accuracy on new people`,
       "Add face landmarks for non-manual markers",
       "Continuous signing with CTC loss — no manual clip boundaries",
       "Sentence-level output with a small language model to fix word order",

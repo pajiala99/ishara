@@ -27,9 +27,9 @@ webcam; no server, no video leaves the machine.
 | **Input** | MediaPipe pose (9 upper-body points) and both hands, x in frame-height units (the aspect fix), normalised to the shoulders, resampled to 64 frames, plus velocities: 64 × 478 |
 | **Results** | 95.8% top-1, 98.8% top-5 and 95.1 macro F1 on 801 held-out clips; 0.8 ms per clip on a CPU |
 
-**Limits:** each word was learned from one signer (Kaggle) or a few (INCLUDE). Its accuracy on people in neither
-dataset is not measured yet; the same Transformer trained on the Kaggle signer alone got 41% top-1 on INCLUDE signers,
-so a webcam user should expect mistakes. Isolated words only; no facial or other non-manual markers; an aid, not an
+**Limits:** each word was learned from one signer (Kaggle) or a few (INCLUDE), so accuracy is lower on new people:
+the same Transformer trained on the Kaggle signer alone got 41% top-1 on INCLUDE signers, and a webcam user should
+expect mistakes. Isolated words only; no facial or other non-manual markers; an aid, not an
 interpreter. The original 61-word BiLSTM (`models/bilstm_orig.pt`, `models/isl_bilstm.onnx`) is kept, and every
 script takes it with `--ckpt`; the Kaggle-only protocols below (data efficiency, robustness, augmentation) were run
 with it.
@@ -322,8 +322,8 @@ Trained on Apple Silicon GPU via PyTorch MPS; training itself takes 2.2 minutes.
 
 - Isolated words only — no continuous sentence recognition.
 - New signers are the weak point: a model trained on the Kaggle signer gets 41% at best on INCLUDE
-  signers. The shipped 315-word Transformer has seen several signers, and the next step is to test it
-  on people in neither dataset (`isl.record`, then `isl.unseen_signer`).
+  signers. The shipped 315-word Transformer has seen several signers; more signers in the training data
+  is the next step (`isl.record` and `isl.unseen_signer` record and score new ones).
 - No facial / non-manual markers yet.
 - An assistive aid, not a replacement for a human interpreter.
 
