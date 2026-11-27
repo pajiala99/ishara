@@ -24,10 +24,9 @@ torch.classes.__path__ = []
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from isl.config import TrainConfig  # noqa: E402
 from isl.dataset import load_sequence  # noqa: E402
+from isl.shipped import held_out, load_model  # noqa: E402
 from isl.features import resample, with_deltas  # noqa: E402
-from isl.models import build_model  # noqa: E402
 
 ART, DATA = ROOT / "artifacts", ROOT / "data"
 TEAL, AMBER, SLATE, RED = "#0F766E", "#D97706", "#64748B", "#B91C1C"
@@ -118,18 +117,19 @@ with tabs[0]:
 
 # ------------------------------------------------------------------ try the model
 with tabs[1]:
-    clips = sorted((DATA / "parity" / "clips").rglob("*.mp4")) if (DATA / "parity" / "clips").exists() else []
+    @st.cache_resource
+    def shipped_model():
+        model, classes, state = load_model()                      # the deployed 315-word Transformer
+        held = {s.path.relative_to(DATA / "keypoints").with_suffix(".mp4") for s in held_out(state, kaggle_only=True)}
+        return model, classes, state, held
+
+    m, classes, state, held = shipped_model()
+    # only clips this model never trained on (its own test split), as H.264 copies the browser can play
+    clips = sorted(c for c in (DATA / "parity" / "clips").rglob("*.mp4")
+                   if c.relative_to(DATA / "parity" / "clips") in held) if (DATA / "parity" / "clips").exists() else []
     if not clips:
-        st.info("No held-out clips found in data/parity/clips.")
+        st.info("No held-out clips found in data/parity/clips: run python -m isl.parity clips.")
     else:
-
-        @st.cache_resource
-        def shipped_model():
-            state = torch.load(ROOT / "models" / "bilstm_orig.pt", map_location="cpu", weights_only=False)
-            m = build_model(state["arch"], len(state["classes"]), TrainConfig())
-            m.load_state_dict(state["model"]); m.eval()
-            return m, state["classes"]
-
         words = sorted({c.parent.name for c in clips})
         left, right = st.columns(2)
         word = left.selectbox("Word", words, index=words.index("Hello") if "Hello" in words else 0)
@@ -138,22 +138,21 @@ with tabs[1]:
         left.video(str(clip))
         kp = DATA / "keypoints" / word / f"{clip.stem}.npz"
         if kp.exists():
-            m, classes = shipped_model()
-            x = torch.from_numpy(with_deltas(resample(load_sequence(kp), 64)))[None]
+            x = torch.from_numpy(with_deltas(resample(load_sequence(kp, aspect_correct=bool(state.get("aspect"))), 64)))[None]
             with torch.no_grad():
                 prob = m(x).softmax(-1)[0].numpy()
             top = np.argsort(-prob)[:5]
             d = pd.DataFrame({"Word": [classes[i].replace("_", " ") for i in top],
                               "Probability %": (100 * prob[top]).astype(float)})
             fig = px.bar(d, x="Probability %", y="Word", orientation="h", text="Probability %",
-                         title="Top 5 from the shipped BiLSTM + attention")
+                         title="Top 5 from the deployed Transformer")
             fig.update_traces(marker_color=[TEAL] + [SLATE] * 4)
             fig.update_yaxes(autorange="reversed", title=None); fig.update_xaxes(range=[0, 100])
             right.plotly_chart(style(fig, 360), use_container_width=True)
             ok = classes[top[0]] == word.lower().replace(" ", "_")
             right.markdown(f"**{'Correct' if ok else 'Wrong'}:** *{classes[top[0]].replace('_', ' ')}* at "
-                           f"{100 * prob[top[0]]:.1f}% (true word: *{word}*). It chooses among 61 words; guessing "
-                           "would score 1.6%.")
+                           f"{100 * prob[top[0]]:.1f}% (true word: *{word}*). It chooses among {len(classes)} words; "
+                           f"guessing would score {100 / len(classes):.1f}%.")
 
 # ------------------------------------------------------------------ model comparison
 with tabs[2]:
